@@ -1,0 +1,4 @@
+~$*.xlsx
+*.xlsx
+*.tmp
+Thumbs.db
