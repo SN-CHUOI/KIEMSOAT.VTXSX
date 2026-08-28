@@ -354,8 +354,16 @@
   }
 
   let dataSources = DEFAULT_SOURCES.map((d, i) => ({ id: 'default-' + i, label: '📊 ' + (d.label || d.sourceFile), data: d }));
-  let activeSourceId = dataSources[0].id;
-  let DATA = dataSources[0].data;
+
+  let hiddenDefaultLabels = [];
+  try {
+    const raw = localStorage.getItem('vt-dashboard-hidden-sources');
+    hiddenDefaultLabels = raw ? JSON.parse(raw) : [];
+  } catch (e) {}
+  const firstVisible = dataSources.find(s => !hiddenDefaultLabels.includes(s.label)) || dataSources[0];
+
+  let activeSourceId = firstVisible.id;
+  let DATA = firstVisible.data;
 
   const state = { product: DATA.products[0], search: '', sort: 'default' };
 
@@ -410,14 +418,26 @@
     rebuildSourceButtons();
   }
 
+  // Cac nguon mac dinh bi nguoi dung an di (luu theo ten, chi anh huong trinh
+  // duyet cua ho - khong xoa du lieu goc). Nguon tai len (src-) khong can luu
+  // vi von da mat khi tai lai trang.
+  function saveHiddenDefaultLabels(arr) {
+    try { localStorage.setItem('vt-dashboard-hidden-sources', JSON.stringify(arr)); } catch (e) {}
+  }
+
   function rebuildSourceButtons() {
     sourceButtonsEl.innerHTML = '';
-    if (dataSources.length <= 1) return; // chua co nguon nao tai len, khong can hien thi thanh chuyen doi
-    dataSources.forEach(s => {
+
+    const hiddenCount = dataSources.filter(s => s.id.indexOf('default-') === 0 && hiddenDefaultLabels.includes(s.label)).length;
+    const visibleSources = dataSources.filter(s => !(s.id.indexOf('default-') === 0 && hiddenDefaultLabels.includes(s.label)));
+
+    if (visibleSources.length <= 1 && hiddenCount === 0) return;
+
+    visibleSources.forEach(s => {
       const isActive = s.id === activeSourceId;
-      const isUploaded = s.id.indexOf('src-') === 0;
+      const isDefault = s.id.indexOf('default-') === 0;
       const wrap = document.createElement('span');
-      wrap.className = 'source-pill-wrap' + (isUploaded ? ' has-remove' : '') + (isActive ? ' active' : '');
+      wrap.className = 'source-pill-wrap has-remove' + (isActive ? ' active' : '');
 
       const btn = document.createElement('button');
       btn.className = 'source-pill' + (isActive ? ' active' : '');
@@ -425,21 +445,45 @@
       btn.addEventListener('click', () => switchSource(s.id));
       wrap.appendChild(btn);
 
-      if (isUploaded) {
-        const rm = document.createElement('button');
-        rm.className = 'source-remove';
-        rm.textContent = '✕';
-        rm.title = 'Bỏ nguồn này';
-        rm.addEventListener('click', (e) => {
-          e.stopPropagation();
+      const rm = document.createElement('button');
+      rm.className = 'source-remove';
+      rm.textContent = '✕';
+      rm.title = isDefault
+        ? 'Ẩn nguồn này trên máy bạn (không xóa file Excel gốc)'
+        : 'Bỏ nguồn này';
+      rm.addEventListener('click', (e) => {
+        e.stopPropagation();
+        if (isDefault) {
+          hiddenDefaultLabels = hiddenDefaultLabels.concat([s.label]);
+          saveHiddenDefaultLabels(hiddenDefaultLabels);
+        } else {
           dataSources = dataSources.filter(x => x.id !== s.id);
-          if (activeSourceId === s.id) { switchSource(dataSources[0].id); }
-          else { rebuildSourceButtons(); }
-        });
-        wrap.appendChild(rm);
-      }
+        }
+        if (activeSourceId === s.id) {
+          const remaining = dataSources.filter(x => !(x.id.indexOf('default-') === 0 && hiddenDefaultLabels.includes(x.label)));
+          switchSource(remaining.length ? remaining[0].id : dataSources[0].id);
+        } else {
+          rebuildSourceButtons();
+        }
+      });
+      wrap.appendChild(rm);
+
       sourceButtonsEl.appendChild(wrap);
     });
+
+    if (hiddenCount > 0) {
+      const showBtn = document.createElement('button');
+      showBtn.className = 'source-pill';
+      showBtn.style.opacity = '0.6';
+      showBtn.textContent = '👁 Hiện lại ' + hiddenCount + ' nguồn đã ẩn';
+      showBtn.title = 'Hiện lại các nguồn mặc định đã ẩn trên máy này';
+      showBtn.addEventListener('click', () => {
+        hiddenDefaultLabels = [];
+        saveHiddenDefaultLabels(hiddenDefaultLabels);
+        rebuildSourceButtons();
+      });
+      sourceButtonsEl.appendChild(showBtn);
+    }
   }
 
   function cellAt(row, idx) {
