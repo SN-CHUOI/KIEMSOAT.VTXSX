@@ -1,8 +1,8 @@
 ﻿// File du lieu tu dong sinh ra tu Excel - KHONG chinh sua tay
-// Sinh luc: 2026-08-28 15:34:49
+// Sinh luc: 2026-08-28 16:07:17
 const DASHBOARD_DATA = {
-    "generatedAt":  "2026-08-28 15:34:49",
-    "sourceFile":  "Kiểm soát vật tư XĐG.xlsx",
+    "generatedAt":  "2026-08-28 16:07:17",
+    "sourceFile":  "Kiểm soát vật tư XĐG.BP2.xlsx",
     "sourceSheet":  "Tổng hợp theo nhóm",
     "products":  [
                      "A456",

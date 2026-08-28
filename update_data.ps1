@@ -1,20 +1,30 @@
 ﻿# Script cap nhat du lieu cho Dashboard Kiem soat vat tu
 # Cach dung: chuot phai -> "Run with PowerShell", hoac chay trong PowerShell:
 #   powershell -ExecutionPolicy Bypass -File update_data.ps1
-# Script se doc file Excel "Kiểm soát vật tư XĐG.xlsx" (sheet "Tổng hợp theo nhóm")
+# Script tu dong tim file Excel (.xlsx) dau tien trong thu muc nay (khong phu
+# thuoc ten file cu the, doi ten van chay duoc) co sheet "Tổng hợp theo nhóm",
 # va xuat ra file data.js de dashboard.html su dung. Sau khi chay xong, mo lai
 # (hoac F5) file dashboard.html de thay du lieu moi.
 
 $ErrorActionPreference = "Stop"
 $scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
-$excelPath = Join-Path $scriptDir "Kiểm soát vật tư XĐG.xlsx"
 $sheetName = "Tổng hợp theo nhóm"
 $outPath = Join-Path $scriptDir "data.js"
 
-if (-not (Test-Path $excelPath)) {
-    Write-Error "Khong tim thay file: $excelPath"
+$xlsxCandidates = Get-ChildItem -Path $scriptDir -Filter "*.xlsx" -File -ErrorAction SilentlyContinue |
+    Where-Object { $_.Name -notlike "~`$*" -and $_.Name -notlike "test_*" } |
+    Sort-Object Name
+
+if ($xlsxCandidates.Count -eq 0) {
+    Write-Error "Khong tim thay file Excel (.xlsx) nao trong thu muc: $scriptDir"
     exit 1
 }
+if ($xlsxCandidates.Count -gt 1) {
+    Write-Output "CANH BAO: Co $($xlsxCandidates.Count) file .xlsx trong thu muc, dang dung file dau tien: $($xlsxCandidates[0].Name)"
+    Write-Output ("  (" + (($xlsxCandidates | ForEach-Object { $_.Name }) -join ", ") + ")")
+}
+$excelPath = $xlsxCandidates[0].FullName
+$excelFileName = $xlsxCandidates[0].Name
 
 $products = @("A456","A789","B456","B789","BCL","CP","CP Nhật (13kg)","CP Nhật (15kg)","CP Nhật (18kg)")
 
@@ -109,7 +119,7 @@ try {
 
     $result = [PSCustomObject]@{
         generatedAt      = (Get-Date).ToString("yyyy-MM-dd HH:mm:ss")
-        sourceFile       = "Kiểm soát vật tư XĐG.xlsx"
+        sourceFile       = $excelFileName
         sourceSheet      = $sheetName
         products         = $products
         keHoachSanLuong  = $kehoach

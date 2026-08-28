@@ -235,14 +235,27 @@
     background: var(--blue); color: #fff; white-space: nowrap;
   }
   .file-btn:hover { opacity: .9; }
-  .reset-btn {
-    font-family: inherit; cursor: pointer; border-radius: 10px; padding: 9px 16px;
-    font-size: 13.5px; font-weight: 600; border: 1.5px solid var(--baseline);
-    background: transparent; color: var(--text-primary); white-space: nowrap; display: none;
-  }
-  .reset-btn:hover { border-color: var(--blue); }
   #uploadStatus { font-size: 12.5px; margin-top: 8px; color: var(--text-muted); }
   #fileInputReal { display: none; }
+
+  .source-buttons { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+  .source-pill-wrap { display: inline-flex; align-items: stretch; }
+  .source-pill {
+    font-family: inherit; cursor: pointer; padding: 8px 14px;
+    font-size: 13px; font-weight: 600; border: 1.5px solid var(--baseline);
+    background: transparent; color: var(--text-primary); transition: all .12s ease;
+    border-radius: 999px;
+  }
+  .source-pill:hover { border-color: var(--blue); }
+  .source-pill.active { background: var(--blue); border-color: var(--blue); color: #fff; }
+  .source-pill-wrap.has-remove .source-pill { border-radius: 999px 0 0 999px; border-right: none; }
+  .source-remove {
+    font-family: inherit; cursor: pointer; padding: 8px 10px; font-size: 12px; font-weight: 700;
+    border: 1.5px solid var(--baseline); border-left: none; border-radius: 0 999px 999px 0;
+    background: transparent; color: var(--text-muted);
+  }
+  .source-remove:hover { color: var(--critical); border-color: var(--critical); }
+  .source-pill-wrap.active .source-remove { border-color: var(--blue); color: #fff; background: var(--blue); }
 </style>
 </head>
 <body>
@@ -263,14 +276,14 @@
   <div class="card upload-panel">
     <div class="u-row">
       <div class="u-text">
-        <div class="u-title">📤 Xem dữ liệu Excel của riêng bạn (tùy chọn)</div>
-        <div class="u-desc">File Excel cần có sheet tên đúng "Tổng hợp theo nhóm" với cấu trúc giống file mẫu. File được xử lý ngay trong trình duyệt của bạn — không gửi lên bất kỳ máy chủ nào, không ai khác xem được.</div>
+        <div class="u-title">📤 Xem dữ liệu Excel của riêng bạn / nhiều nguồn (tùy chọn)</div>
+        <div class="u-desc">Tải lên 1 hoặc nhiều file Excel (mỗi file cần có sheet tên đúng "Tổng hợp theo nhóm" với cấu trúc giống file mẫu) rồi bấm nút bên dưới để chuyển qua lại xem từng nguồn. File được xử lý ngay trong trình duyệt của bạn — không gửi lên bất kỳ máy chủ nào, không ai khác xem được.</div>
       </div>
-      <button class="file-btn" id="fileBtn">Chọn file Excel...</button>
-      <button class="reset-btn" id="resetDataBtn">↩ Quay lại dữ liệu mặc định</button>
-      <input type="file" id="fileInputReal" accept=".xlsx,.xls">
+      <button class="file-btn" id="fileBtn">Thêm file Excel...</button>
+      <input type="file" id="fileInputReal" accept=".xlsx,.xls" multiple>
     </div>
     <div id="uploadStatus"></div>
+    <div class="source-buttons" id="sourceButtons"></div>
   </div>
 
   <div class="card product-panel">
@@ -373,15 +386,58 @@
     render();
   }
 
-  // ---------- Upload file Excel cua nguoi dung ----------
+  // ---------- Quan ly nhieu nguon du lieu (mac dinh + cac file tai len) ----------
   const fileBtn = document.getElementById('fileBtn');
   const fileInputReal = document.getElementById('fileInputReal');
-  const resetDataBtn = document.getElementById('resetDataBtn');
   const uploadStatus = document.getElementById('uploadStatus');
+  const sourceButtonsEl = document.getElementById('sourceButtons');
+
+  let dataSources = [{ id: 'default', label: '📊 Dữ liệu mặc định', data: DEFAULT_DATA }];
+  let activeSourceId = 'default';
 
   function setStatus(text, kind) {
     uploadStatus.textContent = text;
     uploadStatus.style.color = kind === 'error' ? 'var(--critical)' : (kind === 'ok' ? 'var(--good)' : 'var(--text-muted)');
+  }
+
+  function switchSource(id) {
+    const src = dataSources.find(s => s.id === id);
+    if (!src) return;
+    activeSourceId = id;
+    DATA = src.data;
+    resetAndRender();
+    rebuildSourceButtons();
+  }
+
+  function rebuildSourceButtons() {
+    sourceButtonsEl.innerHTML = '';
+    if (dataSources.length <= 1) return; // chua co nguon nao tai len, khong can hien thi thanh chuyen doi
+    dataSources.forEach(s => {
+      const isActive = s.id === activeSourceId;
+      const wrap = document.createElement('span');
+      wrap.className = 'source-pill-wrap' + (s.id !== 'default' ? ' has-remove' : '') + (isActive ? ' active' : '');
+
+      const btn = document.createElement('button');
+      btn.className = 'source-pill' + (isActive ? ' active' : '');
+      btn.textContent = s.label;
+      btn.addEventListener('click', () => switchSource(s.id));
+      wrap.appendChild(btn);
+
+      if (s.id !== 'default') {
+        const rm = document.createElement('button');
+        rm.className = 'source-remove';
+        rm.textContent = '✕';
+        rm.title = 'Bỏ nguồn này';
+        rm.addEventListener('click', (e) => {
+          e.stopPropagation();
+          dataSources = dataSources.filter(x => x.id !== s.id);
+          if (activeSourceId === s.id) { switchSource('default'); }
+          else { rebuildSourceButtons(); }
+        });
+        wrap.appendChild(rm);
+      }
+      sourceButtonsEl.appendChild(wrap);
+    });
   }
 
   function cellAt(row, idx) {
@@ -460,33 +516,48 @@
 
   fileBtn.addEventListener('click', () => fileInputReal.click());
 
-  fileInputReal.addEventListener('change', function (e) {
-    const file = e.target.files[0];
-    if (!file) return;
-    setStatus('Đang đọc file...', 'muted');
-    const reader = new FileReader();
-    reader.onload = function (evt) {
-      try {
-        const data = new Uint8Array(evt.target.result);
-        const workbook = XLSX.read(data, { type: 'array' });
-        DATA = parseWorkbookToDashboardData(workbook, file.name);
-        resetAndRender();
-        resetDataBtn.style.display = 'inline-flex';
-        setStatus('✓ Đang xem dữ liệu từ file: ' + file.name + ' (chỉ hiển thị trên máy bạn)', 'ok');
-      } catch (err) {
-        setStatus('✕ Lỗi: ' + err.message, 'error');
-      }
-    };
-    reader.onerror = function () { setStatus('✕ Không đọc được file.', 'error'); };
-    reader.readAsArrayBuffer(file);
-    fileInputReal.value = '';
-  });
+  function readFileAsArrayBuffer(file) {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = evt => resolve(evt.target.result);
+      reader.onerror = () => reject(new Error('Không đọc được file: ' + file.name));
+      reader.readAsArrayBuffer(file);
+    });
+  }
 
-  resetDataBtn.addEventListener('click', function () {
-    DATA = DEFAULT_DATA;
-    resetAndRender();
-    resetDataBtn.style.display = 'none';
-    setStatus('', 'muted');
+  fileInputReal.addEventListener('change', async function (e) {
+    const files = Array.from(e.target.files || []);
+    if (files.length === 0) return;
+    fileInputReal.value = '';
+
+    let lastAddedId = null;
+    let okCount = 0;
+    const errors = [];
+
+    for (const file of files) {
+      setStatus('Đang đọc file: ' + file.name + ' ...', 'muted');
+      try {
+        const buf = await readFileAsArrayBuffer(file);
+        const workbook = XLSX.read(new Uint8Array(buf), { type: 'array' });
+        const parsed = parseWorkbookToDashboardData(workbook, file.name);
+        const id = 'src-' + Date.now() + '-' + Math.random().toString(36).slice(2, 6);
+        dataSources.push({ id, label: '📄 ' + file.name, data: parsed });
+        lastAddedId = id;
+        okCount++;
+      } catch (err) {
+        errors.push(file.name + ': ' + err.message);
+      }
+    }
+
+    if (lastAddedId) { switchSource(lastAddedId); } else { rebuildSourceButtons(); }
+
+    if (errors.length === 0) {
+      setStatus('✓ Đã thêm ' + okCount + ' nguồn. Bấm vào các nút bên dưới để chuyển qua lại.', 'ok');
+    } else if (okCount > 0) {
+      setStatus('✓ Thêm được ' + okCount + ' file. ✕ Lỗi: ' + errors.join(' | '), 'error');
+    } else {
+      setStatus('✕ Lỗi: ' + errors.join(' | '), 'error');
+    }
   });
 
   // ---------- Theme toggle ----------
