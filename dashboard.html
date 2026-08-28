@@ -577,7 +577,8 @@
     fileInputReal.value = '';
 
     let lastAddedId = null;
-    let okCount = 0;
+    let addedCount = 0;
+    let updatedCount = 0;
     const errors = [];
 
     for (const file of files) {
@@ -586,10 +587,20 @@
         const buf = await readFileAsArrayBuffer(file);
         const workbook = XLSX.read(new Uint8Array(buf), { type: 'array' });
         const parsed = parseWorkbookToDashboardData(workbook, file.name);
-        const id = 'src-' + Date.now() + '-' + Math.random().toString(36).slice(2, 6);
-        dataSources.push({ id, label: '📄 ' + file.name, data: parsed });
-        lastAddedId = id;
-        okCount++;
+
+        // Neu da co nguon nao (mac dinh hoac tai len truoc do) cung ten file
+        // nay, GHI DE du lieu cua nguon do thay vi tao nut moi bi trung.
+        const existing = dataSources.find(s => s.data.sourceFile === file.name);
+        if (existing) {
+          existing.data = parsed;
+          lastAddedId = existing.id;
+          updatedCount++;
+        } else {
+          const id = 'src-' + Date.now() + '-' + Math.random().toString(36).slice(2, 6);
+          dataSources.push({ id, label: '📄 ' + file.name, data: parsed });
+          lastAddedId = id;
+          addedCount++;
+        }
       } catch (err) {
         errors.push(file.name + ': ' + err.message);
       }
@@ -597,10 +608,14 @@
 
     if (lastAddedId) { switchSource(lastAddedId); } else { rebuildSourceButtons(); }
 
+    const parts = [];
+    if (addedCount > 0) parts.push('thêm ' + addedCount + ' nguồn mới');
+    if (updatedCount > 0) parts.push('ghi đè ' + updatedCount + ' nguồn trùng tên');
+
     if (errors.length === 0) {
-      setStatus('✓ Đã thêm ' + okCount + ' nguồn. Bấm vào các nút bên dưới để chuyển qua lại.', 'ok');
-    } else if (okCount > 0) {
-      setStatus('✓ Thêm được ' + okCount + ' file. ✕ Lỗi: ' + errors.join(' | '), 'error');
+      setStatus('✓ Đã ' + parts.join(', ') + '. Bấm vào các nút bên dưới để chuyển qua lại.', 'ok');
+    } else if (parts.length > 0) {
+      setStatus('✓ Đã ' + parts.join(', ') + '. ✕ Lỗi: ' + errors.join(' | '), 'error');
     } else {
       setStatus('✕ Lỗi: ' + errors.join(' | '), 'error');
     }
