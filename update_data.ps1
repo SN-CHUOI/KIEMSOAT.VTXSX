@@ -1,10 +1,11 @@
 ﻿# Script cap nhat du lieu cho Dashboard Kiem soat vat tu
 # Cach dung: chuot phai -> "Run with PowerShell", hoac chay trong PowerShell:
 #   powershell -ExecutionPolicy Bypass -File update_data.ps1
-# Script tu dong tim file Excel (.xlsx) dau tien trong thu muc nay (khong phu
-# thuoc ten file cu the, doi ten van chay duoc) co sheet "Tổng hợp theo nhóm",
-# va xuat ra file data.js de dashboard.html su dung. Sau khi chay xong, mo lai
-# (hoac F5) file dashboard.html de thay du lieu moi.
+# Script tu dong doc TAT CA file Excel (.xlsx) trong thu muc nay (moi file la
+# 1 "nguon" rieng, vd moi xi nghiep 1-nhieu file), voi dieu kien co sheet
+# "Tổng hợp theo nhóm" dung cau truc mau. Ket qua xuat ra data.js de
+# dashboard.html hien thi duoi dang cac nut chuyen doi nguon. Doi ten file
+# thoai mai, khong anh huong. Sau khi chay xong, mo lai (hoac F5) dashboard.html.
 
 $ErrorActionPreference = "Stop"
 $scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
@@ -19,12 +20,6 @@ if ($xlsxCandidates.Count -eq 0) {
     Write-Error "Khong tim thay file Excel (.xlsx) nao trong thu muc: $scriptDir"
     exit 1
 }
-if ($xlsxCandidates.Count -gt 1) {
-    Write-Output "CANH BAO: Co $($xlsxCandidates.Count) file .xlsx trong thu muc, dang dung file dau tien: $($xlsxCandidates[0].Name)"
-    Write-Output ("  (" + (($xlsxCandidates | ForEach-Object { $_.Name }) -join ", ") + ")")
-}
-$excelPath = $xlsxCandidates[0].FullName
-$excelFileName = $xlsxCandidates[0].Name
 
 $products = @("A456","A789","B456","B789","BCL","CP","CP Nhật (13kg)","CP Nhật (15kg)","CP Nhật (18kg)")
 
@@ -38,14 +33,7 @@ function Get-CellVal($cell) {
     return [math]::Round([double]$v, 4)
 }
 
-Write-Output "Dang mo Excel..."
-$excel = New-Object -ComObject Excel.Application
-$excel.Visible = $false
-$excel.DisplayAlerts = $false
-try {
-    $wb = $excel.Workbooks.Open($excelPath, 0, $true)
-    $ws = $wb.Worksheets.Item($sheetName)
-
+function Read-VatTuSheet($ws, $products) {
     # Row 1: ke hoach san luong (cols 15-23) - tinh theo thung
     $kehoach = [ordered]@{}
     for ($i = 0; $i -lt 9; $i++) {
@@ -60,7 +48,6 @@ try {
     while ($true) {
         $maVT = Get-CellVal $ws.Cells.Item($r, 2)
         if ($null -eq $maVT) {
-            # cho phep vai dong trong xen ke, dung han khi gap 3 dong trong lien tiep
             $blankCount = 0
             $rr = $r
             while ($blankCount -lt 3 -and $rr -le ($r + 2)) {
@@ -117,25 +104,75 @@ try {
         $r++
     }
 
-    $result = [PSCustomObject]@{
-        generatedAt      = (Get-Date).ToString("yyyy-MM-dd HH:mm:ss")
-        sourceFile       = $excelFileName
-        sourceSheet      = $sheetName
-        products         = $products
-        keHoachSanLuong  = $kehoach
-        items            = $rows
+    return [PSCustomObject]@{
+        keHoachSanLuong = $kehoach
+        items           = $rows
     }
+}
 
-    $json = $result | ConvertTo-Json -Depth 8
-    $jsContent = "// File du lieu tu dong sinh ra tu Excel - KHONG chinh sua tay`n" +
-                 "// Sinh luc: $($result.generatedAt)`n" +
-                 "const DASHBOARD_DATA = $json;`n"
+Write-Output "Dang mo Excel..."
+$excel = New-Object -ComObject Excel.Application
+$excel.Visible = $false
+$excel.DisplayAlerts = $false
 
-    [System.IO.File]::WriteAllText($outPath, $jsContent, [System.Text.Encoding]::UTF8)
-    Write-Output "Da cap nhat: $outPath ($($rows.Count) vat tu)"
+$sources = @()
+$errors = @()
+
+try {
+    foreach ($file in $xlsxCandidates) {
+        $label = [System.IO.Path]::GetFileNameWithoutExtension($file.Name)
+        Write-Output "Dang doc: $($file.Name)"
+        $wb = $null
+        try {
+            $wb = $excel.Workbooks.Open($file.FullName, 0, $true)
+            $sheetExists = $false
+            foreach ($s in $wb.Worksheets) { if ($s.Name -eq $sheetName) { $sheetExists = $true } }
+            if (-not $sheetExists) {
+                throw "Khong tim thay sheet '$sheetName' trong file nay."
+            }
+            $ws = $wb.Worksheets.Item($sheetName)
+            $parsed = Read-VatTuSheet $ws $products
+
+            $sources += [PSCustomObject]@{
+                label           = $label
+                generatedAt     = (Get-Date).ToString("yyyy-MM-dd HH:mm:ss")
+                sourceFile      = $file.Name
+                sourceSheet     = $sheetName
+                products        = $products
+                keHoachSanLuong = $parsed.keHoachSanLuong
+                items           = $parsed.items
+            }
+        }
+        catch {
+            $errors += "$($file.Name): $($_.Exception.Message)"
+            Write-Output "  LOI, bo qua file nay: $($_.Exception.Message)"
+        }
+        finally {
+            if ($wb) { $wb.Close($false) }
+        }
+    }
 }
 finally {
-    if ($wb) { $wb.Close($false) }
     $excel.Quit()
     [System.Runtime.Interopservices.Marshal]::ReleaseComObject($excel) | Out-Null
+}
+
+if ($sources.Count -eq 0) {
+    Write-Error "Khong doc duoc du lieu tu bat ky file nao. Chi tiet: $($errors -join ' | ')"
+    exit 1
+}
+
+$json = $sources | ConvertTo-Json -Depth 8
+# Neu chi co 1 nguon, ConvertTo-Json khong tu boc mang [] - can ep kieu mang
+if ($sources.Count -eq 1) { $json = "[$json]" }
+
+$jsContent = "// File du lieu tu dong sinh ra tu Excel - KHONG chinh sua tay`n" +
+             "// Sinh luc: $((Get-Date).ToString('yyyy-MM-dd HH:mm:ss'))`n" +
+             "// So nguon: $($sources.Count)`n" +
+             "const DASHBOARD_DATA_SOURCES = $json;`n"
+
+[System.IO.File]::WriteAllText($outPath, $jsContent, [System.Text.Encoding]::UTF8)
+Write-Output "Da cap nhat: $outPath ($($sources.Count) nguon, tong $((($sources | ForEach-Object {$_.items.Count}) | Measure-Object -Sum).Sum) dong vat tu)"
+if ($errors.Count -gt 0) {
+    Write-Output "CANH BAO: $($errors.Count) file bi loi va da bo qua: $($errors -join ' | ')"
 }

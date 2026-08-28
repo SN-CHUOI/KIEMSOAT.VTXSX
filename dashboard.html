@@ -343,15 +343,19 @@
 <script src="data.js"></script>
 <script>
 (function () {
-  const DEFAULT_DATA = (typeof DASHBOARD_DATA !== "undefined") ? DASHBOARD_DATA : null;
-  let DATA = DEFAULT_DATA;
+  const DEFAULT_SOURCES = (typeof DASHBOARD_DATA_SOURCES !== "undefined" && Array.isArray(DASHBOARD_DATA_SOURCES))
+    ? DASHBOARD_DATA_SOURCES : [];
   const nf = new Intl.NumberFormat('vi-VN', { maximumFractionDigits: 0 });
 
-  if (!DATA) {
+  if (DEFAULT_SOURCES.length === 0) {
     document.body.innerHTML = '<div style="padding:60px;text-align:center;font-family:sans-serif;color:#d03b3b;">' +
-      'Không tìm thấy data.js. Hãy chạy update_data.ps1 trước, hoặc đảm bảo data.js nằm cùng thư mục với dashboard.html.</div>';
+      'Không tìm thấy data.js (hoặc không có nguồn dữ liệu nào). Hãy chạy update_data.ps1 trước, hoặc đảm bảo data.js nằm cùng thư mục với dashboard.html.</div>';
     return;
   }
+
+  let dataSources = DEFAULT_SOURCES.map((d, i) => ({ id: 'default-' + i, label: '📊 ' + (d.label || d.sourceFile), data: d }));
+  let activeSourceId = dataSources[0].id;
+  let DATA = dataSources[0].data;
 
   const state = { product: DATA.products[0], search: '', sort: 'default' };
 
@@ -392,9 +396,6 @@
   const uploadStatus = document.getElementById('uploadStatus');
   const sourceButtonsEl = document.getElementById('sourceButtons');
 
-  let dataSources = [{ id: 'default', label: '📊 Dữ liệu mặc định', data: DEFAULT_DATA }];
-  let activeSourceId = 'default';
-
   function setStatus(text, kind) {
     uploadStatus.textContent = text;
     uploadStatus.style.color = kind === 'error' ? 'var(--critical)' : (kind === 'ok' ? 'var(--good)' : 'var(--text-muted)');
@@ -414,8 +415,9 @@
     if (dataSources.length <= 1) return; // chua co nguon nao tai len, khong can hien thi thanh chuyen doi
     dataSources.forEach(s => {
       const isActive = s.id === activeSourceId;
+      const isUploaded = s.id.indexOf('src-') === 0;
       const wrap = document.createElement('span');
-      wrap.className = 'source-pill-wrap' + (s.id !== 'default' ? ' has-remove' : '') + (isActive ? ' active' : '');
+      wrap.className = 'source-pill-wrap' + (isUploaded ? ' has-remove' : '') + (isActive ? ' active' : '');
 
       const btn = document.createElement('button');
       btn.className = 'source-pill' + (isActive ? ' active' : '');
@@ -423,7 +425,7 @@
       btn.addEventListener('click', () => switchSource(s.id));
       wrap.appendChild(btn);
 
-      if (s.id !== 'default') {
+      if (isUploaded) {
         const rm = document.createElement('button');
         rm.className = 'source-remove';
         rm.textContent = '✕';
@@ -431,7 +433,7 @@
         rm.addEventListener('click', (e) => {
           e.stopPropagation();
           dataSources = dataSources.filter(x => x.id !== s.id);
-          if (activeSourceId === s.id) { switchSource('default'); }
+          if (activeSourceId === s.id) { switchSource(dataSources[0].id); }
           else { rebuildSourceButtons(); }
         });
         wrap.appendChild(rm);
@@ -749,6 +751,7 @@
     renderTable(rows);
   }
 
+  rebuildSourceButtons();
   render();
 })();
 </script>
