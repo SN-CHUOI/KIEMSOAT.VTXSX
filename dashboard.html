@@ -223,6 +223,26 @@
     body { padding: 14px; }
     .toolbar input[type="search"] { width: 100%; }
   }
+
+  .upload-panel { padding: 16px 18px; margin-bottom: 18px; }
+  .upload-panel .u-row { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
+  .upload-panel .u-text { flex: 1; min-width: 220px; }
+  .upload-panel .u-title { font-weight: 700; font-size: 14px; margin-bottom: 3px; }
+  .upload-panel .u-desc { font-size: 12.5px; color: var(--text-secondary); line-height: 1.5; }
+  .file-btn {
+    font-family: inherit; cursor: pointer; border-radius: 10px; padding: 9px 16px;
+    font-size: 13.5px; font-weight: 600; border: 1.5px solid var(--blue);
+    background: var(--blue); color: #fff; white-space: nowrap;
+  }
+  .file-btn:hover { opacity: .9; }
+  .reset-btn {
+    font-family: inherit; cursor: pointer; border-radius: 10px; padding: 9px 16px;
+    font-size: 13.5px; font-weight: 600; border: 1.5px solid var(--baseline);
+    background: transparent; color: var(--text-primary); white-space: nowrap; display: none;
+  }
+  .reset-btn:hover { border-color: var(--blue); }
+  #uploadStatus { font-size: 12.5px; margin-top: 8px; color: var(--text-muted); }
+  #fileInputReal { display: none; }
 </style>
 </head>
 <body>
@@ -239,6 +259,19 @@
       <button data-mode="system" class="active">💻 Hệ thống</button>
     </div>
   </header>
+
+  <div class="card upload-panel">
+    <div class="u-row">
+      <div class="u-text">
+        <div class="u-title">📤 Xem dữ liệu Excel của riêng bạn (tùy chọn)</div>
+        <div class="u-desc">File Excel cần có sheet tên đúng "Tổng hợp theo nhóm" với cấu trúc giống file mẫu. File được xử lý ngay trong trình duyệt của bạn — không gửi lên bất kỳ máy chủ nào, không ai khác xem được.</div>
+      </div>
+      <button class="file-btn" id="fileBtn">Chọn file Excel...</button>
+      <button class="reset-btn" id="resetDataBtn">↩ Quay lại dữ liệu mặc định</button>
+      <input type="file" id="fileInputReal" accept=".xlsx,.xls">
+    </div>
+    <div id="uploadStatus"></div>
+  </div>
 
   <div class="card product-panel">
     <div class="label">Chọn sản phẩm để lọc dữ liệu vật tư</div>
@@ -293,10 +326,12 @@
 
 </div>
 
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 <script src="data.js"></script>
 <script>
 (function () {
-  const DATA = (typeof DASHBOARD_DATA !== "undefined") ? DASHBOARD_DATA : null;
+  const DEFAULT_DATA = (typeof DASHBOARD_DATA !== "undefined") ? DASHBOARD_DATA : null;
+  let DATA = DEFAULT_DATA;
   const nf = new Intl.NumberFormat('vi-VN', { maximumFractionDigits: 0 });
 
   if (!DATA) {
@@ -305,11 +340,154 @@
     return;
   }
 
-  document.getElementById('footGenerated').textContent = DATA.generatedAt || '—';
-  document.getElementById('subGenerated').textContent =
-    'Nguồn: ' + DATA.sourceFile + ' — sheet "' + DATA.sourceSheet + '"';
-
   const state = { product: DATA.products[0], search: '', sort: 'default' };
+
+  function refreshHeaderInfo() {
+    document.getElementById('footGenerated').textContent = DATA.generatedAt || '—';
+    document.getElementById('subGenerated').textContent =
+      'Nguồn: ' + DATA.sourceFile + ' — sheet "' + DATA.sourceSheet + '"';
+  }
+  refreshHeaderInfo();
+
+  function rebuildProductButtons() {
+    const productButtonsEl = document.getElementById('productButtons');
+    productButtonsEl.innerHTML = '';
+    DATA.products.forEach(p => {
+      const btn = document.createElement('button');
+      btn.className = 'pbtn';
+      btn.textContent = p;
+      btn.dataset.product = p;
+      btn.addEventListener('click', () => { state.product = p; render(); });
+      productButtonsEl.appendChild(btn);
+    });
+  }
+
+  function resetAndRender() {
+    state.product = DATA.products[0];
+    state.search = '';
+    state.sort = 'default';
+    document.getElementById('searchInput').value = '';
+    document.getElementById('sortSelect').value = 'default';
+    rebuildProductButtons();
+    refreshHeaderInfo();
+    render();
+  }
+
+  // ---------- Upload file Excel cua nguoi dung ----------
+  const fileBtn = document.getElementById('fileBtn');
+  const fileInputReal = document.getElementById('fileInputReal');
+  const resetDataBtn = document.getElementById('resetDataBtn');
+  const uploadStatus = document.getElementById('uploadStatus');
+
+  function setStatus(text, kind) {
+    uploadStatus.textContent = text;
+    uploadStatus.style.color = kind === 'error' ? 'var(--critical)' : (kind === 'ok' ? 'var(--good)' : 'var(--text-muted)');
+  }
+
+  function cellAt(row, idx) {
+    if (!row) return null;
+    const v = row[idx];
+    if (v === null || v === undefined) return null;
+    if (typeof v === 'string' && v.trim() === '') return null;
+    return v;
+  }
+
+  function parseWorkbookToDashboardData(workbook, sourceFileName) {
+    const sheetName = "Tổng hợp theo nhóm";
+    if (workbook.SheetNames.indexOf(sheetName) === -1) {
+      throw new Error('Không tìm thấy sheet "' + sheetName + '". Sheet có trong file: ' + workbook.SheetNames.join(', '));
+    }
+    const ws = workbook.Sheets[sheetName];
+    const rows = XLSX.utils.sheet_to_json(ws, { header: 1, raw: true, defval: null });
+    const products = ["A456","A789","B456","B789","BCL","CP","CP Nhật (13kg)","CP Nhật (15kg)","CP Nhật (18kg)"];
+
+    const keHoachSanLuong = {};
+    const row0 = rows[0] || [];
+    products.forEach((p, i) => {
+      const v = cellAt(row0, 14 + i);
+      keHoachSanLuong[p] = v === null ? 0 : v;
+    });
+
+    const items = [];
+    let blankStreak = 0;
+    for (let r = 3; r < rows.length; r++) {
+      const row = rows[r] || [];
+      const maVT = cellAt(row, 1);
+      if (maVT === null) {
+        blankStreak++;
+        if (blankStreak >= 3) break;
+        continue;
+      }
+      blankStreak = 0;
+      const tenVT = cellAt(row, 2);
+      const dvt = cellAt(row, 3);
+      let tonNhap = cellAt(row, 4);
+      if (tonNhap === null) tonNhap = 0;
+
+      const dapUng = {};
+      products.forEach((p, i) => { dapUng[p] = cellAt(row, 5 + i); });
+      const nhuCau = {};
+      products.forEach((p, i) => {
+        let v = cellAt(row, 14 + i);
+        if (v === null) v = 0;
+        nhuCau[p] = v;
+      });
+      const phanBo = {};
+      products.forEach((p, i) => { phanBo[p] = cellAt(row, 27 + i); });
+
+      items.push({
+        maVT, tenVT, dvt, tonNhap, dapUng, nhuCau, phanBo,
+        tongNhuCau: cellAt(row, 23),
+        thuaThieuTong: cellAt(row, 24),
+        danhGia: cellAt(row, 25),
+        phanTramDapUng: cellAt(row, 26)
+      });
+    }
+
+    if (items.length === 0) {
+      throw new Error('Không đọc được dòng dữ liệu nào. Kiểm tra file có đúng cấu trúc mẫu không.');
+    }
+
+    return {
+      generatedAt: new Date().toLocaleString('vi-VN'),
+      sourceFile: sourceFileName,
+      sourceSheet: sheetName,
+      products,
+      keHoachSanLuong,
+      items
+    };
+  }
+
+  fileBtn.addEventListener('click', () => fileInputReal.click());
+
+  fileInputReal.addEventListener('change', function (e) {
+    const file = e.target.files[0];
+    if (!file) return;
+    setStatus('Đang đọc file...', 'muted');
+    const reader = new FileReader();
+    reader.onload = function (evt) {
+      try {
+        const data = new Uint8Array(evt.target.result);
+        const workbook = XLSX.read(data, { type: 'array' });
+        DATA = parseWorkbookToDashboardData(workbook, file.name);
+        resetAndRender();
+        resetDataBtn.style.display = 'inline-flex';
+        setStatus('✓ Đang xem dữ liệu từ file: ' + file.name + ' (chỉ hiển thị trên máy bạn)', 'ok');
+      } catch (err) {
+        setStatus('✕ Lỗi: ' + err.message, 'error');
+      }
+    };
+    reader.onerror = function () { setStatus('✕ Không đọc được file.', 'error'); };
+    reader.readAsArrayBuffer(file);
+    fileInputReal.value = '';
+  });
+
+  resetDataBtn.addEventListener('click', function () {
+    DATA = DEFAULT_DATA;
+    resetAndRender();
+    resetDataBtn.style.display = 'none';
+    setStatus('', 'muted');
+  });
 
   // ---------- Theme toggle ----------
   const themeButtons = document.querySelectorAll('#themeToggle button');
@@ -326,15 +504,7 @@
   } catch (e) {}
 
   // ---------- Product buttons ----------
-  const productButtonsEl = document.getElementById('productButtons');
-  DATA.products.forEach(p => {
-    const btn = document.createElement('button');
-    btn.className = 'pbtn';
-    btn.textContent = p;
-    btn.dataset.product = p;
-    btn.addEventListener('click', () => { state.product = p; render(); });
-    productButtonsEl.appendChild(btn);
-  });
+  rebuildProductButtons();
 
   document.getElementById('searchInput').addEventListener('input', (e) => {
     state.search = e.target.value.trim().toLowerCase();
