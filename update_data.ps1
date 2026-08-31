@@ -3,9 +3,12 @@
 #   powershell -ExecutionPolicy Bypass -File update_data.ps1
 # Script tu dong doc TAT CA file Excel (.xlsx) trong thu muc nay (moi file la
 # 1 "nguon" rieng, vd moi xi nghiep 1-nhieu file), voi dieu kien co sheet
-# "Tổng hợp theo nhóm" dung cau truc mau. Ket qua xuat ra data.js de
-# dashboard.html hien thi duoi dang cac nut chuyen doi nguon. Doi ten file
-# thoai mai, khong anh huong. Sau khi chay xong, mo lai (hoac F5) dashboard.html.
+# "Tổng hợp theo nhóm" dung cau truc mau. KHONG con co dinh so luong san pham -
+# script TU DO TIM tieu de cac bang (dong 2) va TU DONG DOC danh sach san
+# pham/pham cap rieng cua tung file (dong 3), nen moi xi nghiep co the co danh
+# muc san pham khac nhau (9, 16, hay bao nhieu cung duoc). Ket qua xuat ra
+# data.js de dashboard.html hien thi duoi dang cac nut chuyen doi nguon.
+# Sau khi chay xong, mo lai (hoac F5) dashboard.html.
 
 $ErrorActionPreference = "Stop"
 $scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
@@ -13,15 +16,13 @@ $sheetName = "Tổng hợp theo nhóm"
 $outPath = Join-Path $scriptDir "data.js"
 
 $xlsxCandidates = Get-ChildItem -Path $scriptDir -Filter "*.xlsx" -File -ErrorAction SilentlyContinue |
-    Where-Object { $_.Name -notlike "~`$*" -and $_.Name -notlike "test_*" } |
+    Where-Object { $_.Name -notlike "~`$*" -and $_.Name -notlike "test_*" -and $_.Name -notlike "_backup_*" } |
     Sort-Object Name
 
 if ($xlsxCandidates.Count -eq 0) {
     Write-Error "Khong tim thay file Excel (.xlsx) nao trong thu muc: $scriptDir"
     exit 1
 }
-
-$products = @("A456","A789","B456","B789","BCL","CP","CP Nhật (13kg)","CP Nhật (15kg)","CP Nhật (18kg)")
 
 function Get-CellVal($cell) {
     $v = $cell.Value2
@@ -33,12 +34,74 @@ function Get-CellVal($cell) {
     return [math]::Round([double]$v, 4)
 }
 
-function Read-VatTuSheet($ws, $products) {
-    # Row 1: ke hoach san luong (cols 15-23) - tinh theo thung
+# Do tim cac "bang" tren dong tieu de (mac dinh dong 2): moi o khong rong la
+# ten 1 bang, do rong bang = khoang cach toi o khong rong ke tiep.
+function Get-SectionMap($ws, [int]$headerRow, [int]$maxScanCol) {
+    $labels = @()
+    for ($c = 6; $c -le $maxScanCol; $c++) {
+        $t = $ws.Cells.Item($headerRow, $c).Text
+        if ($t -and $t.Trim() -ne "") { $labels += [PSCustomObject]@{ Col = $c; Text = $t.Trim() } }
+    }
+    $sections = [ordered]@{}
+    for ($i = 0; $i -lt $labels.Count; $i++) {
+        $startCol = $labels[$i].Col
+        $endCol = if ($i + 1 -lt $labels.Count) { $labels[$i + 1].Col - 1 } else { $maxScanCol }
+        $sections[$labels[$i].Text] = [PSCustomObject]@{ Start = $startCol; End = $endCol }
+    }
+    return $sections
+}
+
+function Find-SectionKey($sections, [string[]]$mustContain, [string[]]$mustNotContain) {
+    if ($null -eq $mustNotContain) { $mustNotContain = @() }
+    foreach ($key in $sections.Keys) {
+        $ok = $true
+        foreach ($m in $mustContain) { if ($key -notlike "*$m*") { $ok = $false; break } }
+        if ($ok) {
+            foreach ($n in $mustNotContain) { if ($key -like "*$n*") { $ok = $false; break } }
+        }
+        if ($ok) { return $key }
+    }
+    return $null
+}
+
+function Read-VatTuSheet($ws) {
+    $maxScanCol = $ws.UsedRange.Columns.Count
+    $sections = Get-SectionMap $ws 2 $maxScanCol
+
+    $capKey = Find-SectionKey $sections @("TỔNG SẢN LƯỢNG")
+    $demKey = Find-SectionKey $sections @("NHU CẦU")
+    $phanBoKey = Find-SectionKey $sections @("THỪA", "THIẾU", "PHÂN BỔ")
+    $tongNhuCauKey = Find-SectionKey $sections @("Tổng nhu cầu")
+    $thuaThieuTongKey = Find-SectionKey $sections @("Thừa", "Thiếu") @("PHÂN BỔ", "QUY RA")
+    $danhGiaKey = Find-SectionKey $sections @("Đánh giá")
+    $pctKey = Find-SectionKey $sections @("đáp ứng") @("TỔNG SẢN LƯỢNG")
+
+    if (-not $capKey -or -not $demKey) {
+        throw "Khong tim thay bang 'TONG SAN LUONG' hoac 'NHU CAU' o dong tieu de (dong 2) cua sheet."
+    }
+
+    $capStart = $sections[$capKey].Start
+    $productCount = $sections[$capKey].End - $capStart + 1
+    $demStart = $sections[$demKey].Start
+    $phanBoStart = if ($phanBoKey) { $sections[$phanBoKey].Start } else { $null }
+    $tongNhuCauCol = if ($tongNhuCauKey) { $sections[$tongNhuCauKey].Start } else { $null }
+    $thuaThieuTongCol = if ($thuaThieuTongKey) { $sections[$thuaThieuTongKey].Start } else { $null }
+    $danhGiaCol = if ($danhGiaKey) { $sections[$danhGiaKey].Start } else { $null }
+    $pctCol = if ($pctKey) { $sections[$pctKey].Start } else { $null }
+
+    # Danh sach san pham/pham cap: doc truc tiep tu dong 3, trong vung bang
+    # "Tong san luong" - moi file co the khac nhau, khong con co dinh.
+    $products = @()
+    for ($i = 0; $i -lt $productCount; $i++) {
+        $name = $ws.Cells.Item(3, $capStart + $i).Value2
+        if ($null -eq $name) { $name = "" }
+        $products += "$name".Trim()
+    }
+
+    # Ke hoach san luong: dong 1, dung vi tri voi bang Nhu cau
     $kehoach = [ordered]@{}
-    for ($i = 0; $i -lt 9; $i++) {
-        $c = 15 + $i
-        $val = Get-CellVal $ws.Cells.Item(1, $c)
+    for ($i = 0; $i -lt $productCount; $i++) {
+        $val = Get-CellVal $ws.Cells.Item(1, $demStart + $i)
         if ($null -eq $val) { $val = 0 }
         $kehoach[$products[$i]] = $val
     }
@@ -66,45 +129,44 @@ function Read-VatTuSheet($ws, $products) {
         if ($null -eq $tonNhap) { $tonNhap = 0 }
 
         $dapUng = [ordered]@{}
-        for ($i = 0; $i -lt 9; $i++) {
-            $c = 6 + $i
-            $dapUng[$products[$i]] = Get-CellVal $ws.Cells.Item($r, $c)
-        }
         $nhuCau = [ordered]@{}
-        for ($i = 0; $i -lt 9; $i++) {
-            $c = 15 + $i
-            $v = Get-CellVal $ws.Cells.Item($r, $c)
+        $phanBo = [ordered]@{}
+        for ($i = 0; $i -lt $productCount; $i++) {
+            $dapUng[$products[$i]] = Get-CellVal $ws.Cells.Item($r, $capStart + $i)
+            $v = Get-CellVal $ws.Cells.Item($r, $demStart + $i)
             if ($null -eq $v) { $v = 0 }
             $nhuCau[$products[$i]] = $v
-        }
-        $phanBo = [ordered]@{}
-        for ($i = 0; $i -lt 9; $i++) {
-            $c = 28 + $i
-            $phanBo[$products[$i]] = Get-CellVal $ws.Cells.Item($r, $c)
+            if ($phanBoStart) {
+                $phanBo[$products[$i]] = Get-CellVal $ws.Cells.Item($r, $phanBoStart + $i)
+            }
+            else {
+                $phanBo[$products[$i]] = $null
+            }
         }
 
-        $tongNhuCau = Get-CellVal $ws.Cells.Item($r, 24)
-        $thuaThieuTong = Get-CellVal $ws.Cells.Item($r, 25)
-        $danhGia = Get-CellVal $ws.Cells.Item($r, 26)
-        $phanTram = Get-CellVal $ws.Cells.Item($r, 27)
+        $tongNhuCau = if ($tongNhuCauCol) { Get-CellVal $ws.Cells.Item($r, $tongNhuCauCol) } else { $null }
+        $thuaThieuTong = if ($thuaThieuTongCol) { Get-CellVal $ws.Cells.Item($r, $thuaThieuTongCol) } else { $null }
+        $danhGia = if ($danhGiaCol) { Get-CellVal $ws.Cells.Item($r, $danhGiaCol) } else { $null }
+        $phanTram = if ($pctCol) { Get-CellVal $ws.Cells.Item($r, $pctCol) } else { $null }
 
         $rows += [PSCustomObject]@{
-            maVT            = $maVT
-            tenVT           = $tenVT
-            dvt             = $dvt
-            tonNhap         = $tonNhap
-            dapUng          = $dapUng
-            nhuCau          = $nhuCau
-            phanBo          = $phanBo
-            tongNhuCau      = $tongNhuCau
-            thuaThieuTong   = $thuaThieuTong
-            danhGia         = $danhGia
-            phanTramDapUng  = $phanTram
+            maVT           = $maVT
+            tenVT          = $tenVT
+            dvt            = $dvt
+            tonNhap        = $tonNhap
+            dapUng         = $dapUng
+            nhuCau         = $nhuCau
+            phanBo         = $phanBo
+            tongNhuCau     = $tongNhuCau
+            thuaThieuTong  = $thuaThieuTong
+            danhGia        = $danhGia
+            phanTramDapUng = $phanTram
         }
         $r++
     }
 
     return [PSCustomObject]@{
+        products        = $products
         keHoachSanLuong = $kehoach
         items           = $rows
     }
@@ -131,14 +193,16 @@ try {
                 throw "Khong tim thay sheet '$sheetName' trong file nay."
             }
             $ws = $wb.Worksheets.Item($sheetName)
-            $parsed = Read-VatTuSheet $ws $products
+            $parsed = Read-VatTuSheet $ws
+
+            Write-Output "  -> $($parsed.products.Count) san pham/pham cap: $($parsed.products -join ', ')"
 
             $sources += [PSCustomObject]@{
                 label           = $label
                 generatedAt     = (Get-Date).ToString("yyyy-MM-dd HH:mm:ss")
                 sourceFile      = $file.Name
                 sourceSheet     = $sheetName
-                products        = $products
+                products        = $parsed.products
                 keHoachSanLuong = $parsed.keHoachSanLuong
                 items           = $parsed.items
             }

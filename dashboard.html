@@ -568,6 +568,35 @@
     return v;
   }
 
+  // Do tim cac "bang" tren dong tieu de (dong 2 trong Excel): moi o khong
+  // rong la ten 1 bang, do rong bang = khoang cach toi o khong rong ke tiep.
+  // Nho vay moi file co the co so luong/ten san pham khac nhau, khong con
+  // co dinh "9 san pham" nua.
+  function getSectionMap(headerRowArr, maxColIdx) {
+    const labels = [];
+    for (let c = 5; c <= maxColIdx; c++) {
+      const t = cellAt(headerRowArr, c);
+      if (t !== null && String(t).trim() !== '') labels.push({ col: c, text: String(t).trim() });
+    }
+    const sections = {};
+    for (let i = 0; i < labels.length; i++) {
+      const start = labels[i].col;
+      const end = (i + 1 < labels.length) ? labels[i + 1].col - 1 : maxColIdx;
+      sections[labels[i].text] = { start, end };
+    }
+    return sections;
+  }
+
+  function findSectionKey(sections, mustContain, mustNotContain) {
+    mustNotContain = mustNotContain || [];
+    for (const key of Object.keys(sections)) {
+      let ok = mustContain.every(m => key.indexOf(m) !== -1);
+      if (ok) ok = !mustNotContain.some(n => key.indexOf(n) !== -1);
+      if (ok) return key;
+    }
+    return null;
+  }
+
   function parseWorkbookToDashboardData(workbook, sourceFileName) {
     const sheetName = "Tổng hợp theo nhóm";
     if (workbook.SheetNames.indexOf(sheetName) === -1) {
@@ -575,12 +604,46 @@
     }
     const ws = workbook.Sheets[sheetName];
     const rows = XLSX.utils.sheet_to_json(ws, { header: 1, raw: true, defval: null });
-    const products = ["A456","A789","B456","B789","BCL","CP","CP Nhật (13kg)","CP Nhật (15kg)","CP Nhật (18kg)"];
+    const range = XLSX.utils.decode_range(ws['!ref']);
+    const maxColIdx = range.e.c;
+
+    const headerRow = rows[1] || [];    // dong 2 trong Excel
+    const subHeaderRow = rows[2] || []; // dong 3 trong Excel
+    const sections = getSectionMap(headerRow, maxColIdx);
+
+    const capKey = findSectionKey(sections, ["TỔNG SẢN LƯỢNG"]);
+    const demKey = findSectionKey(sections, ["NHU CẦU"]);
+    const phanBoKey = findSectionKey(sections, ["THỪA", "THIẾU", "PHÂN BỔ"]);
+    const tongNhuCauKey = findSectionKey(sections, ["Tổng nhu cầu"]);
+    const thuaThieuTongKey = findSectionKey(sections, ["Thừa", "Thiếu"], ["PHÂN BỔ", "QUY RA"]);
+    const danhGiaKey = findSectionKey(sections, ["Đánh giá"]);
+    const pctKey = findSectionKey(sections, ["đáp ứng"], ["TỔNG SẢN LƯỢNG"]);
+
+    if (!capKey || !demKey) {
+      throw new Error('Không tìm thấy bảng "TỔNG SẢN LƯỢNG" hoặc "NHU CẦU" ở dòng tiêu đề (dòng 2) của sheet.');
+    }
+
+    const capStart = sections[capKey].start;
+    const productCount = sections[capKey].end - capStart + 1;
+    const demStart = sections[demKey].start;
+    const phanBoStart = phanBoKey ? sections[phanBoKey].start : null;
+    const tongNhuCauCol = tongNhuCauKey ? sections[tongNhuCauKey].start : null;
+    const thuaThieuTongCol = thuaThieuTongKey ? sections[thuaThieuTongKey].start : null;
+    const danhGiaCol = danhGiaKey ? sections[danhGiaKey].start : null;
+    const pctCol = pctKey ? sections[pctKey].start : null;
+
+    // Danh sach san pham/pham cap: doc truc tiep tu dong 3, trong vung bang
+    // "Tong san luong" - moi file co the khac nhau.
+    const products = [];
+    for (let i = 0; i < productCount; i++) {
+      const name = cellAt(subHeaderRow, capStart + i);
+      products.push(name === null ? '' : String(name).trim());
+    }
 
     const keHoachSanLuong = {};
-    const row0 = rows[0] || [];
+    const row0 = rows[0] || []; // dong 1 trong Excel
     products.forEach((p, i) => {
-      const v = cellAt(row0, 14 + i);
+      const v = cellAt(row0, demStart + i);
       keHoachSanLuong[p] = v === null ? 0 : v;
     });
 
@@ -601,22 +664,22 @@
       if (tonNhap === null) tonNhap = 0;
 
       const dapUng = {};
-      products.forEach((p, i) => { dapUng[p] = cellAt(row, 5 + i); });
       const nhuCau = {};
+      const phanBo = {};
       products.forEach((p, i) => {
-        let v = cellAt(row, 14 + i);
+        dapUng[p] = cellAt(row, capStart + i);
+        let v = cellAt(row, demStart + i);
         if (v === null) v = 0;
         nhuCau[p] = v;
+        phanBo[p] = (phanBoStart !== null) ? cellAt(row, phanBoStart + i) : null;
       });
-      const phanBo = {};
-      products.forEach((p, i) => { phanBo[p] = cellAt(row, 27 + i); });
 
       items.push({
         maVT, tenVT, dvt, tonNhap, dapUng, nhuCau, phanBo,
-        tongNhuCau: cellAt(row, 23),
-        thuaThieuTong: cellAt(row, 24),
-        danhGia: cellAt(row, 25),
-        phanTramDapUng: cellAt(row, 26)
+        tongNhuCau: (tongNhuCauCol !== null) ? cellAt(row, tongNhuCauCol) : null,
+        thuaThieuTong: (thuaThieuTongCol !== null) ? cellAt(row, thuaThieuTongCol) : null,
+        danhGia: (danhGiaCol !== null) ? cellAt(row, danhGiaCol) : null,
+        phanTramDapUng: (pctCol !== null) ? cellAt(row, pctCol) : null
       });
     }
 
