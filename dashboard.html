@@ -238,6 +238,21 @@
   #uploadStatus { font-size: 12.5px; margin-top: 8px; color: var(--text-muted); }
   #fileInputReal { display: none; }
 
+  .calc-panel { padding: 16px 18px; margin-bottom: 18px; border: 1.5px solid var(--blue); }
+  #qtyInput {
+    font-family: inherit; padding: 9px 12px; border-radius: 10px; border: 1px solid var(--border);
+    background: var(--surface-1); color: var(--text-primary); font-size: 13.5px; outline: none;
+    font-variant-numeric: tabular-nums;
+  }
+  #qtyInput:focus { border-color: var(--blue); }
+  .reset-btn-sm {
+    font-family: inherit; cursor: pointer; border-radius: 10px; padding: 9px 14px;
+    font-size: 13px; font-weight: 600; border: 1.5px solid var(--baseline);
+    background: transparent; color: var(--text-secondary); white-space: nowrap;
+  }
+  .reset-btn-sm:hover { border-color: var(--blue); color: var(--text-primary); }
+  #calcStatus { font-size: 12.5px; margin-top: 8px; color: var(--blue); font-weight: 600; }
+
   .source-buttons { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
   .source-pill-wrap { display: inline-flex; align-items: stretch; }
   .source-pill {
@@ -291,6 +306,20 @@
     <div class="product-buttons" id="productButtons"></div>
   </div>
 
+  <div class="card calc-panel">
+    <div class="u-row">
+      <div class="u-text">
+        <div class="u-title">🧮 Kiểm tra đề nghị xuất vật tư (tùy chọn)</div>
+        <div class="u-desc">Nhập sản lượng đề nghị sản xuất (thùng) để tính thử lượng vật tư cần xuất theo định mức, kiểm tra có vượt tồn kho không — không cần đợi đến kế hoạch chính thức. Để trống sẽ dùng lại kế hoạch có sẵn trong Excel.</div>
+      </div>
+      <div style="display:flex; align-items:center; gap:8px;">
+        <input type="number" id="qtyInput" min="0" step="1" placeholder="Sản lượng (thùng)" style="width:160px;">
+        <button class="reset-btn-sm" id="qtyClearBtn" title="Xóa, dùng lại kế hoạch Excel">↩ Mặc định</button>
+      </div>
+    </div>
+    <div id="calcStatus"></div>
+  </div>
+
   <div class="kpi-grid" id="kpiGrid"></div>
 
   <div class="alert-banner" id="alertBanner">
@@ -321,7 +350,7 @@
           <th class="num">ĐVT</th>
           <th class="num" data-key="tonNhap">Tồn + Nhập</th>
           <th class="num" data-key="dapUng">Đáp ứng SX (thùng)</th>
-          <th class="num" data-key="nhuCau">Nhu cầu vật tư SX</th>
+          <th class="num" data-key="nhuCau" id="thNhuCau">Nhu cầu vật tư SX</th>
           <th class="num" data-key="phanBo">Thừa / Thiếu</th>
           <th class="num">% Đáp ứng</th>
           <th>Trạng thái</th>
@@ -365,7 +394,7 @@
   let activeSourceId = firstVisible.id;
   let DATA = firstVisible.data;
 
-  const state = { product: DATA.products[0], search: '', sort: 'default' };
+  const state = { product: DATA.products[0], search: '', sort: 'default', customQty: null };
 
   function refreshHeaderInfo() {
     document.getElementById('footGenerated').textContent = DATA.generatedAt || '—';
@@ -382,7 +411,13 @@
       btn.className = 'pbtn';
       btn.textContent = p;
       btn.dataset.product = p;
-      btn.addEventListener('click', () => { state.product = p; render(); });
+      btn.addEventListener('click', () => {
+        state.product = p;
+        state.customQty = null;
+        document.getElementById('qtyInput').value = '';
+        document.getElementById('calcStatus').textContent = '';
+        render();
+      });
       productButtonsEl.appendChild(btn);
     });
   }
@@ -391,8 +426,10 @@
     state.product = DATA.products[0];
     state.search = '';
     state.sort = 'default';
+    state.customQty = null;
     document.getElementById('searchInput').value = '';
     document.getElementById('sortSelect').value = 'default';
+    document.getElementById('qtyInput').value = '';
     rebuildProductButtons();
     refreshHeaderInfo();
     render();
@@ -638,6 +675,17 @@
   // ---------- Product buttons ----------
   rebuildProductButtons();
 
+  document.getElementById('qtyInput').addEventListener('input', (e) => {
+    const v = parseFloat(e.target.value);
+    state.customQty = (e.target.value.trim() !== '' && !isNaN(v) && v >= 0) ? v : null;
+    render();
+  });
+  document.getElementById('qtyClearBtn').addEventListener('click', () => {
+    state.customQty = null;
+    document.getElementById('qtyInput').value = '';
+    render();
+  });
+
   document.getElementById('searchInput').addEventListener('input', (e) => {
     state.search = e.target.value.trim().toLowerCase();
     render();
@@ -659,19 +707,38 @@
   function normalize(s) { return (s || '').toString().toLowerCase(); }
 
   function computeRows(product) {
+    const qty = state.customQty;
+    const customMode = (qty !== null && qty > 0);
+
     return DATA.items
       .filter(it => it.dapUng[product] !== null && it.dapUng[product] !== undefined)
       .map(it => {
         const dapUng = it.dapUng[product];
-        const nhuCau = it.nhuCau[product] || 0;
-        const phanBo = (it.phanBo[product] === null || it.phanBo[product] === undefined) ? null : it.phanBo[product];
-        let status, pct;
-        if (nhuCau === 0) {
-          status = 'none'; pct = null;
+        let nhuCau, phanBo, status, pct;
+
+        if (customMode) {
+          // Dinh muc (vat tu / thung) suy ra tu chinh du lieu Excel:
+          // dinh_muc = Ton+Nhap / Dap ung SX (vi Dap ung = Ton+Nhap / dinh_muc)
+          if (dapUng > 0) {
+            const dinhMuc = it.tonNhap / dapUng;
+            nhuCau = qty * dinhMuc;
+            phanBo = it.tonNhap - nhuCau;
+            pct = dapUng / qty;
+            status = phanBo < 0 ? 'short' : 'ok';
+          } else {
+            nhuCau = 0; phanBo = null; status = 'none'; pct = null;
+          }
         } else {
-          status = (phanBo !== null && phanBo < 0) ? 'short' : 'ok';
-          pct = it.phanTramDapUng;
+          nhuCau = it.nhuCau[product] || 0;
+          phanBo = (it.phanBo[product] === null || it.phanBo[product] === undefined) ? null : it.phanBo[product];
+          if (nhuCau === 0) {
+            status = 'none'; pct = null;
+          } else {
+            status = (phanBo !== null && phanBo < 0) ? 'short' : 'ok';
+            pct = it.phanTramDapUng;
+          }
         }
+
         return {
           maVT: it.maVT, tenVT: it.tenVT, dvt: it.dvt,
           tonNhap: it.tonNhap, dapUng, nhuCau, phanBo, status, pct
@@ -717,12 +784,19 @@
     const ok = rows.filter(r => r.status === 'ok').length;
     const short = rows.filter(r => r.status === 'short').length;
     const none = rows.filter(r => r.status === 'none').length;
-    const kehoach = DATA.keHoachSanLuong[product] || 0;
+    const customMode = (state.customQty !== null && state.customQty > 0);
+    const kehoach = customMode ? state.customQty : (DATA.keHoachSanLuong[product] || 0);
+    const kehoachLabel = customMode ? 'Sản lượng đề nghị (tùy chỉnh)' : ('Kế hoạch sản lượng ' + escapeHtml(product));
+
+    const calcStatusEl = document.getElementById('calcStatus');
+    calcStatusEl.textContent = customMode
+      ? '🧮 Đang tính thử theo sản lượng đề nghị ' + nf.format(state.customQty) + ' thùng — chưa dùng kế hoạch Excel.'
+      : '';
 
     const kpiGrid = document.getElementById('kpiGrid');
     kpiGrid.innerHTML = `
       <div class="card kpi blue">
-        <div class="k-label">Kế hoạch sản lượng ${escapeHtml(product)}</div>
+        <div class="k-label">${kehoachLabel}</div>
         <div class="k-value">${nf.format(kehoach)}<span class="unit">thùng</span></div>
       </div>
       <div class="card kpi">
@@ -802,6 +876,8 @@
 
   function render() {
     document.querySelectorAll('.pbtn').forEach(b => b.classList.toggle('active', b.dataset.product === state.product));
+    const customMode = (state.customQty !== null && state.customQty > 0);
+    document.getElementById('thNhuCau').textContent = customMode ? 'Vật tư cần xuất (đề nghị)' : 'Nhu cầu vật tư SX';
     let rows = computeRows(state.product);
     rows = filterRows(rows);
     rows = sortRows(rows);
