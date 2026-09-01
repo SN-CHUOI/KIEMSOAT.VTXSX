@@ -262,6 +262,10 @@
   #calcStatus { font-size: 12.5px; margin-top: 8px; color: var(--blue); font-weight: 600; }
 
   .source-buttons { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+  .update-time-badge {
+    font-size: 12.5px; color: var(--text-muted); font-style: italic;
+    margin-top: 10px; opacity: 0.8; letter-spacing: .01em;
+  }
   .source-pill-wrap { display: inline-flex; align-items: stretch; }
   .source-pill {
     font-family: inherit; cursor: pointer; padding: 8px 14px;
@@ -307,6 +311,7 @@
     </div>
     <div id="uploadStatus"></div>
     <div class="source-buttons" id="sourceButtons"></div>
+    <div class="update-time-badge" id="updateTimeBadge"></div>
   </div>
 
   <div class="card product-panel">
@@ -406,10 +411,29 @@
     return DATA.products.some(p => (state.customQtyByProduct[p] || 0) > 0);
   }
 
+  // Doi dinh dang gio sinh du lieu (tu PowerShell "yyyy-MM-dd HH:mm:ss" hoac
+  // tu trinh duyet toLocaleString('vi-VN')) sang dang "16h:00 ngày 01/09/2026".
+  function formatUpdateTime(generatedAt) {
+    if (!generatedAt) return null;
+    const pad = n => String(n).padStart(2, '0');
+    const isoMatch = /^(\d{4})-(\d{2})-(\d{2})[ T](\d{2}):(\d{2})/.exec(generatedAt);
+    if (isoMatch) {
+      const [, y, m, d, hh, mm] = isoMatch;
+      return hh + 'h:' + mm + ' ngày ' + d + '/' + m + '/' + y;
+    }
+    const d2 = new Date(generatedAt);
+    if (!isNaN(d2.getTime())) {
+      return pad(d2.getHours()) + 'h:' + pad(d2.getMinutes()) + ' ngày ' + pad(d2.getDate()) + '/' + pad(d2.getMonth() + 1) + '/' + d2.getFullYear();
+    }
+    return generatedAt;
+  }
+
   function refreshHeaderInfo() {
     document.getElementById('footGenerated').textContent = DATA.generatedAt || '—';
     document.getElementById('subGenerated').textContent =
       'Nguồn: ' + DATA.sourceFile + ' — sheet "' + DATA.sourceSheet + '"';
+    const t = formatUpdateTime(DATA.generatedAt);
+    document.getElementById('updateTimeBadge').textContent = t ? ('🕐 Số liệu được cập nhật: ' + t) : '';
   }
   refreshHeaderInfo();
 
