@@ -199,7 +199,7 @@ try {
 
             $sources += [PSCustomObject]@{
                 label           = $label
-                generatedAt     = (Get-Date).ToString("yyyy-MM-dd HH:mm:ss")
+                generatedAt     = $file.LastWriteTime.ToString("yyyy-MM-dd HH:mm:ss")
                 sourceFile      = $file.Name
                 sourceSheet     = $sheetName
                 products        = $parsed.products

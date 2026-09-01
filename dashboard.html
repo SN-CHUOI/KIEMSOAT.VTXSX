@@ -621,7 +621,7 @@
     return null;
   }
 
-  function parseWorkbookToDashboardData(workbook, sourceFileName) {
+  function parseWorkbookToDashboardData(workbook, sourceFileName, sourceLastModified) {
     const sheetName = "Tổng hợp theo nhóm";
     if (workbook.SheetNames.indexOf(sheetName) === -1) {
       throw new Error('Không tìm thấy sheet "' + sheetName + '". Sheet có trong file: ' + workbook.SheetNames.join(', '));
@@ -711,8 +711,20 @@
       throw new Error('Không đọc được dòng dữ liệu nào. Kiểm tra file có đúng cấu trúc mẫu không.');
     }
 
+    // Lay moc thoi gian LUU FILE LAN CUOI (nguoi sua file luu lai luc nao),
+    // khong phai gio tai len - de moi file the hien dung thoi diem cua no.
+    let generatedAt;
+    if (sourceLastModified) {
+      const d = new Date(sourceLastModified);
+      const pad = n => String(n).padStart(2, '0');
+      generatedAt = d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate()) + ' ' +
+        pad(d.getHours()) + ':' + pad(d.getMinutes()) + ':' + pad(d.getSeconds());
+    } else {
+      generatedAt = new Date().toLocaleString('vi-VN');
+    }
+
     return {
-      generatedAt: new Date().toLocaleString('vi-VN'),
+      generatedAt,
       sourceFile: sourceFileName,
       sourceSheet: sheetName,
       products,
@@ -747,7 +759,7 @@
       try {
         const buf = await readFileAsArrayBuffer(file);
         const workbook = XLSX.read(new Uint8Array(buf), { type: 'array' });
-        const parsed = parseWorkbookToDashboardData(workbook, file.name);
+        const parsed = parseWorkbookToDashboardData(workbook, file.name, file.lastModified);
 
         // Neu da co nguon nao (mac dinh hoac tai len truoc do) cung ten file
         // nay, GHI DE du lieu cua nguon do thay vi tao nut moi bi trung.

@@ -1,10 +1,10 @@
 ﻿// File du lieu tu dong sinh ra tu Excel - KHONG chinh sua tay
-// Sinh luc: 2026-08-31 19:06:49
+// Sinh luc: 2026-09-01 13:46:43
 // So nguon: 3
 const DASHBOARD_DATA_SOURCES = [
     {
         "label":  "Kiểm soát vật tư XĐG.BP1.1",
-        "generatedAt":  "2026-08-31 19:06:36",
+        "generatedAt":  "2026-08-29 08:18:55",
         "sourceFile":  "Kiểm soát vật tư XĐG.BP1.1.xlsx",
         "sourceSheet":  "Tổng hợp theo nhóm",
         "products":  [
@@ -3259,7 +3259,7 @@ const DASHBOARD_DATA_SOURCES = [
     },
     {
         "label":  "Kiểm soát vật tư XĐG.BP1.2",
-        "generatedAt":  "2026-08-31 19:06:42",
+        "generatedAt":  "2026-08-29 08:34:51",
         "sourceFile":  "Kiểm soát vật tư XĐG.BP1.2.xlsx",
         "sourceSheet":  "Tổng hợp theo nhóm",
         "products":  [
@@ -6514,7 +6514,7 @@ const DASHBOARD_DATA_SOURCES = [
     },
     {
         "label":  "Kiểm soát vật tư XĐG.BP2",
-        "generatedAt":  "2026-08-31 19:06:49",
+        "generatedAt":  "2026-08-31 19:08:55",
         "sourceFile":  "Kiểm soát vật tư XĐG.BP2.xlsx",
         "sourceSheet":  "Tổng hợp theo nhóm",
         "products":  [
