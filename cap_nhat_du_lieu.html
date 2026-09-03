@@ -52,6 +52,11 @@
   .download-btn { font-family: inherit; cursor: pointer; border-radius: 10px; padding: 12px 22px;
     font-size: 15px; font-weight: 700; border: none; background: var(--good); color: #fff; margin-top: 14px; display: none; }
   .download-btn:hover { opacity: .9; }
+  .publish-btn { font-family: inherit; cursor: pointer; border-radius: 10px; padding: 12px 22px;
+    font-size: 15px; font-weight: 700; border: none; background: var(--blue); color: #fff; margin-top: 14px;
+    margin-right: 10px; display: none; }
+  .publish-btn:hover { opacity: .9; }
+  .publish-btn:disabled { opacity: .5; cursor: not-allowed; }
   code { background: var(--blue-soft); padding: 1px 6px; border-radius: 5px; font-size: 12.5px; }
   .step-num { display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px;
     border-radius: 999px; background: var(--blue); color: #fff; font-size: 12px; font-weight: 700; margin-right: 6px; }
@@ -69,24 +74,16 @@
     <input type="file" id="fileInput" accept=".xlsx,.xls" multiple>
     <div id="status" class="status-muted"></div>
     <ul class="source-list" id="sourceList"></ul>
-    <button class="download-btn" id="downloadBtn">⬇️ Tải xuống file data.js</button>
-  </div>
-
-  <div class="card">
-    <h2>Bước 2 — Đưa file lên GitHub (kéo-thả, không cần gõ lệnh)</h2>
-    <ol>
-      <li><span class="step-num">1</span>Vào: <a href="https://github.com/SN-CHUOI/KIEMSOATVATU.XSX" target="_blank">github.com/SN-CHUOI/KIEMSOATVATU.XSX</a></li>
-      <li><span class="step-num">2</span>Bấm nút <b>"Add file"</b> (gần nút xanh "Code") → chọn <b>"Upload files"</b></li>
-      <li><span class="step-num">3</span><b>Kéo thả</b> file <code>data.js</code> vừa tải xuống ở Bước 1 vào giữa khung trang (hoặc bấm "choose your files" để chọn) — nếu máy đã có sẵn file <code>data.js</code> cũ trong thư mục Downloads, hãy xóa nó trước khi tải để tránh bị đổi tên thành <code>data (1).js</code></li>
-      <li><span class="step-num">4</span>Cuộn xuống dưới, bấm nút xanh <b>"Commit changes"</b></li>
-    </ol>
-    <p class="sub" style="margin-top:10px;">Xong — trong khoảng 30-60 giây, trang web <a href="https://sn-chuoi.github.io/KIEMSOATVATU.XSX/dashboard.html" target="_blank">dashboard</a> sẽ tự hiện dữ liệu mới cho tất cả mọi người.</p>
+    <div>
+      <button class="publish-btn" id="publishBtn">🚀 Lưu lên GitHub ngay</button>
+      <button class="download-btn" id="downloadBtn" style="margin-top:0;">⬇️ Hoặc tải file data.js (kéo-thả thủ công)</button>
+    </div>
   </div>
 
   <div class="card" style="border-color:var(--critical);">
     <h2>Lưu ý</h2>
     <ul>
-      <li>Bạn cần được mời làm <b>Collaborator</b> trên repo GitHub này trước thì mới bấm "Commit changes" được — nếu chưa, báo người quản trị mời bạn.</li>
+      <li>Bấm <b>"🚀 Lưu lên GitHub ngay"</b> để cập nhật thẳng cho tất cả mọi người, không cần rời trang này.</li>
       <li>File Excel cần có sheet tên đúng <b>"Tổng hợp theo nhóm"</b> với cấu trúc giống file mẫu.</li>
     </ul>
   </div>
@@ -99,11 +96,16 @@
   let currentSources = []; // mang cac {label, generatedAt, sourceFile, sourceSheet, products, keHoachSanLuong, items}
   const changedLabels = new Set();
 
+  // Dien link server sau khi deploy xong tren Vercel, vi du:
+  // 'https://kiemsoatvatu-publish.vercel.app/api/publish'
+  const SERVER_URL = '';
+
   const statusEl = document.getElementById('status');
   const fileBtn = document.getElementById('fileBtn');
   const fileInput = document.getElementById('fileInput');
   const sourceListEl = document.getElementById('sourceList');
   const downloadBtn = document.getElementById('downloadBtn');
+  const publishBtn = document.getElementById('publishBtn');
 
   function setStatus(text, cls) {
     statusEl.textContent = text;
@@ -118,7 +120,9 @@
         (isChanged ? '<span class="badge new">Vừa cập nhật</span>' : '') +
         '</li>';
     }).join('');
-    downloadBtn.style.display = currentSources.length > 0 ? 'inline-block' : 'none';
+    const has = currentSources.length > 0;
+    downloadBtn.style.display = has ? 'inline-block' : 'none';
+    publishBtn.style.display = has ? 'inline-block' : 'none';
   }
 
   function escapeHtml(s) {
@@ -359,6 +363,36 @@
     a.click();
     document.body.removeChild(a);
     setTimeout(() => URL.revokeObjectURL(url), 5000);
+  });
+
+  publishBtn.addEventListener('click', async function () {
+    if (!SERVER_URL) {
+      setStatus('✕ Server chưa được cấu hình (SERVER_URL trống). Dùng tạm nút tải file bên cạnh.', 'status-err');
+      return;
+    }
+    publishBtn.disabled = true;
+    publishBtn.textContent = 'Đang lưu lên GitHub...';
+    setStatus('Đang lưu lên GitHub, vui lòng đợi...', 'status-muted');
+    try {
+      const resp = await fetch(SERVER_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          sources: currentSources,
+          sourceFileName: Array.from(changedLabels).join(', ')
+        })
+      });
+      const data = await resp.json().catch(() => ({}));
+      if (!resp.ok || !data.success) {
+        throw new Error(data.error || ('Server tra ve loi ' + resp.status));
+      }
+      setStatus('✓ Đã lưu thành công lên GitHub! Trong khoảng 30-60 giây, dashboard sẽ tự hiện dữ liệu mới cho tất cả mọi người.', 'status-ok');
+    } catch (err) {
+      setStatus('✕ Lỗi: ' + err.message, 'status-err');
+    } finally {
+      publishBtn.disabled = false;
+      publishBtn.textContent = '🚀 Lưu lên GitHub ngay';
+    }
   });
 })();
 </script>
