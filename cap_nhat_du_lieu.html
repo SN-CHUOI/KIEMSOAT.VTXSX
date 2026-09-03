@@ -55,18 +55,6 @@
   code { background: var(--blue-soft); padding: 1px 6px; border-radius: 5px; font-size: 12.5px; }
   .step-num { display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px;
     border-radius: 999px; background: var(--blue); color: #fff; font-size: 12px; font-weight: 700; margin-right: 6px; }
-  .token-row { display: flex; gap: 8px; align-items: center; margin-top: 10px; flex-wrap: wrap; }
-  .token-row input[type="password"], .token-row input[type="text"] {
-    font-family: inherit; flex: 1; min-width: 220px; padding: 9px 12px; border-radius: 10px;
-    border: 1px solid var(--border); background: var(--page); color: var(--text-primary); font-size: 13px;
-  }
-  .save-btn { font-family: inherit; cursor: pointer; border-radius: 10px; padding: 12px 22px;
-    font-size: 15px; font-weight: 700; border: none; background: var(--blue); color: #fff; margin-top: 14px;
-    display: none; margin-right: 10px; }
-  .save-btn:hover { opacity: .9; }
-  .save-btn:disabled { opacity: .5; cursor: not-allowed; }
-  .token-ok { font-size: 12.5px; color: var(--good); margin-top: 6px; }
-  .checkbox-row { display: flex; align-items: center; gap: 6px; font-size: 12.5px; color: var(--text-secondary); margin-top: 8px; }
 </style>
 </head>
 <body>
@@ -75,44 +63,30 @@
   <p class="sub">Dùng khi bạn được cấp quyền cộng tác viên trên GitHub và muốn tự cập nhật dữ liệu — không cần cài đặt gì, chỉ cần trình duyệt.</p>
 
   <div class="card">
-    <h2>Bước 1 — Dán "chìa khóa" của bạn (chỉ cần làm 1 lần)</h2>
-    <p class="sub" style="margin-bottom:6px;">Cần được mời làm <b>Collaborator</b> trên repo này trước (báo người quản trị mời bạn qua email). Sau đó tự tạo chìa khóa riêng của bạn:</p>
-    <ol>
-      <li><span class="step-num">1</span>Vào: <a href="https://github.com/settings/personal-access-tokens/new" target="_blank">github.com/settings/personal-access-tokens/new</a></li>
-      <li><span class="step-num">2</span><b>Repository access</b> → chọn <b>Only select repositories</b> → chọn <code>KIEMSOATVATU.XSX</code></li>
-      <li><span class="step-num">3</span><b>Permissions</b> → <b>Repository permissions</b> → tìm <b>Contents</b> → chọn <b>Read and write</b></li>
-      <li><span class="step-num">4</span>Bấm <b>Generate token</b>, copy đoạn mã hiện ra (bắt đầu bằng <code>github_pat_</code>)</li>
-      <li><span class="step-num">5</span>Dán vào ô bên dưới:</li>
-    </ol>
-    <div class="token-row">
-      <input type="password" id="tokenInput" placeholder="Dán token github_pat_... vào đây">
-      <button class="file-btn" id="saveTokenBtn">Lưu</button>
-    </div>
-    <div class="checkbox-row">
-      <input type="checkbox" id="rememberToken" checked>
-      <label for="rememberToken">Ghi nhớ trên máy này (chỉ máy này thấy được, không gửi cho ai kể cả tôi)</label>
-    </div>
-    <div id="tokenStatus" class="token-ok"></div>
-  </div>
-
-  <div class="card">
-    <h2>Bước 2 — Chọn file Excel và lưu</h2>
+    <h2>Bước 1 — Tạo file dữ liệu mới</h2>
     <p class="sub" style="margin-bottom:10px;">Công cụ sẽ tự lấy dữ liệu hiện tại của các nguồn khác, chỉ thêm/cập nhật đúng file bạn chọn — không làm mất dữ liệu của người khác.</p>
     <button class="file-btn" id="fileBtn" disabled>Đang tải dữ liệu hiện tại...</button>
     <input type="file" id="fileInput" accept=".xlsx,.xls" multiple>
     <div id="status" class="status-muted"></div>
     <ul class="source-list" id="sourceList"></ul>
-    <div>
-      <button class="save-btn" id="publishBtn">🚀 Lưu lên GitHub ngay</button>
-      <button class="download-btn" id="downloadBtn" style="margin-top:0;">⬇️ Hoặc tải file data.js (nếu muốn tự kéo-thả)</button>
-    </div>
+    <button class="download-btn" id="downloadBtn">⬇️ Tải xuống file data.js</button>
+  </div>
+
+  <div class="card">
+    <h2>Bước 2 — Đưa file lên GitHub (kéo-thả, không cần gõ lệnh)</h2>
+    <ol>
+      <li><span class="step-num">1</span>Vào: <a href="https://github.com/SN-CHUOI/KIEMSOATVATU.XSX" target="_blank">github.com/SN-CHUOI/KIEMSOATVATU.XSX</a></li>
+      <li><span class="step-num">2</span>Bấm nút <b>"Add file"</b> (gần nút xanh "Code") → chọn <b>"Upload files"</b></li>
+      <li><span class="step-num">3</span><b>Kéo thả</b> file <code>data.js</code> vừa tải xuống ở Bước 1 vào giữa khung trang (hoặc bấm "choose your files" để chọn) — nếu máy đã có sẵn file <code>data.js</code> cũ trong thư mục Downloads, hãy xóa nó trước khi tải để tránh bị đổi tên thành <code>data (1).js</code></li>
+      <li><span class="step-num">4</span>Cuộn xuống dưới, bấm nút xanh <b>"Commit changes"</b></li>
+    </ol>
+    <p class="sub" style="margin-top:10px;">Xong — trong khoảng 30-60 giây, trang web <a href="https://sn-chuoi.github.io/KIEMSOATVATU.XSX/dashboard.html" target="_blank">dashboard</a> sẽ tự hiện dữ liệu mới cho tất cả mọi người.</p>
   </div>
 
   <div class="card" style="border-color:var(--critical);">
     <h2>Lưu ý</h2>
     <ul>
-      <li>Bạn cần được mời làm <b>Collaborator</b> trên repo GitHub này trước thì token mới hoạt động — nếu chưa, báo người quản trị mời bạn.</li>
-      <li>Token của bạn chỉ được lưu <b>trên trình duyệt của chính bạn</b> (localStorage) — không gửi cho tôi hay bất kỳ máy chủ nào khác ngoài GitHub.</li>
+      <li>Bạn cần được mời làm <b>Collaborator</b> trên repo GitHub này trước thì mới bấm "Commit changes" được — nếu chưa, báo người quản trị mời bạn.</li>
       <li>File Excel cần có sheet tên đúng <b>"Tổng hợp theo nhóm"</b> với cấu trúc giống file mẫu.</li>
     </ul>
   </div>
@@ -130,37 +104,6 @@
   const fileInput = document.getElementById('fileInput');
   const sourceListEl = document.getElementById('sourceList');
   const downloadBtn = document.getElementById('downloadBtn');
-  const publishBtn = document.getElementById('publishBtn');
-  const tokenInput = document.getElementById('tokenInput');
-  const saveTokenBtn = document.getElementById('saveTokenBtn');
-  const rememberToken = document.getElementById('rememberToken');
-  const tokenStatusEl = document.getElementById('tokenStatus');
-
-  const OWNER = 'SN-CHUOI';
-  const REPO = 'KIEMSOATVATU.XSX';
-
-  // ---------- Quan ly token (chi luu tren may nguoi dung, khong gui di dau) ----------
-  function getToken() {
-    try { return localStorage.getItem('vt-github-token') || ''; } catch (e) { return ''; }
-  }
-  (function initToken() {
-    const saved = getToken();
-    if (saved) {
-      tokenInput.value = saved;
-      tokenStatusEl.textContent = '✓ Đã có token lưu sẵn trên máy này.';
-    }
-  })();
-  saveTokenBtn.addEventListener('click', () => {
-    const t = tokenInput.value.trim();
-    if (!t) { tokenStatusEl.textContent = '✕ Chưa nhập token.'; tokenStatusEl.style.color = 'var(--critical)'; return; }
-    if (rememberToken.checked) {
-      try { localStorage.setItem('vt-github-token', t); } catch (e) {}
-    } else {
-      try { localStorage.removeItem('vt-github-token'); } catch (e) {}
-    }
-    tokenStatusEl.textContent = '✓ Đã lưu token cho phiên làm việc này.';
-    tokenStatusEl.style.color = 'var(--good)';
-  });
 
   function setStatus(text, cls) {
     statusEl.textContent = text;
@@ -175,9 +118,7 @@
         (isChanged ? '<span class="badge new">Vừa cập nhật</span>' : '') +
         '</li>';
     }).join('');
-    const has = currentSources.length > 0;
-    downloadBtn.style.display = has ? 'inline-block' : 'none';
-    publishBtn.style.display = has ? 'inline-block' : 'none';
+    downloadBtn.style.display = currentSources.length > 0 ? 'inline-block' : 'none';
   }
 
   function escapeHtml(s) {
@@ -418,62 +359,6 @@
     a.click();
     document.body.removeChild(a);
     setTimeout(() => URL.revokeObjectURL(url), 5000);
-  });
-
-  function b64EncodeUtf8(str) {
-    const bytes = new TextEncoder().encode(str);
-    let binary = '';
-    bytes.forEach(b => { binary += String.fromCharCode(b); });
-    return btoa(binary);
-  }
-
-  publishBtn.addEventListener('click', async function () {
-    const token = tokenInput.value.trim();
-    if (!token) {
-      setStatus('✕ Bạn chưa dán token ở Bước 1.', 'status-err');
-      return;
-    }
-    publishBtn.disabled = true;
-    publishBtn.textContent = 'Đang lưu lên GitHub...';
-    setStatus('Đang lưu lên GitHub, vui lòng đợi...', 'status-muted');
-
-    const apiBase = 'https://api.github.com/repos/' + OWNER + '/' + REPO + '/contents/data.js';
-    const ghHeaders = {
-      'Authorization': 'Bearer ' + token,
-      'Accept': 'application/vnd.github+json'
-    };
-
-    try {
-      const getResp = await fetch(apiBase, { headers: ghHeaders });
-      if (!getResp.ok) {
-        const t = await getResp.text();
-        throw new Error('Không lấy được file hiện tại từ GitHub (kiểm tra lại token/quyền): ' + t);
-      }
-      const getData = await getResp.json();
-      const sha = getData.sha;
-
-      const jsContent = buildDataJsContent();
-      const putResp = await fetch(apiBase, {
-        method: 'PUT',
-        headers: { ...ghHeaders, 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          message: 'Cap nhat du lieu qua cong cu web: ' + Array.from(changedLabels).join(', '),
-          content: b64EncodeUtf8(jsContent),
-          sha: sha
-        })
-      });
-      if (!putResp.ok) {
-        const t = await putResp.text();
-        throw new Error('Không ghi được lên GitHub: ' + t);
-      }
-
-      setStatus('✓ Đã lưu thành công lên GitHub! Trong khoảng 30-60 giây, dashboard sẽ tự hiện dữ liệu mới cho tất cả mọi người.', 'status-ok');
-    } catch (err) {
-      setStatus('✕ Lỗi: ' + err.message, 'status-err');
-    } finally {
-      publishBtn.disabled = false;
-      publishBtn.textContent = '🚀 Lưu lên GitHub ngay';
-    }
   });
 })();
 </script>
