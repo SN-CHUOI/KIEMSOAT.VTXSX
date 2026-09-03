@@ -238,6 +238,14 @@
     background: var(--blue); color: #fff; white-space: nowrap;
   }
   .file-btn:hover { opacity: .9; }
+  .file-btn:disabled { opacity: .5; cursor: not-allowed; }
+  .publish-btn {
+    font-family: inherit; cursor: pointer; border-radius: 10px; padding: 9px 16px;
+    font-size: 13.5px; font-weight: 600; border: none;
+    background: var(--good); color: #fff; white-space: nowrap;
+  }
+  .publish-btn:hover { opacity: .9; }
+  .publish-btn:disabled { opacity: .5; cursor: not-allowed; }
   #uploadStatus { font-size: 12.5px; margin-top: 8px; color: var(--text-muted); }
   #fileInputReal { display: none; }
 
@@ -307,9 +315,10 @@
     <div class="u-row">
       <div class="u-text">
         <div class="u-title">📤 Xem dữ liệu Excel của riêng bạn / nhiều nguồn (tùy chọn)</div>
-        <div class="u-desc">Tải lên 1 hoặc nhiều file Excel (mỗi file cần có sheet tên đúng "Tổng hợp theo nhóm" với cấu trúc giống file mẫu) rồi bấm nút bên dưới để chuyển qua lại xem từng nguồn. File được xử lý ngay trong trình duyệt của bạn — không gửi lên bất kỳ máy chủ nào, không ai khác xem được.</div>
+        <div class="u-desc">Tải lên 1 hoặc nhiều file Excel (mỗi file cần có sheet tên đúng "Tổng hợp theo nhóm" với cấu trúc giống file mẫu) rồi bấm nút bên dưới để chuyển qua lại xem từng nguồn. File được xử lý ngay trong trình duyệt của bạn. Bấm "Lưu lên GitHub ngay" để cập nhật thẳng cho tất cả mọi người xem link này.</div>
       </div>
       <button class="file-btn" id="fileBtn">Thêm file Excel...</button>
+      <button class="publish-btn" id="publishBtn" style="display:none;">🚀 Lưu lên GitHub ngay</button>
       <input type="file" id="fileInputReal" accept=".xlsx,.xls" multiple>
     </div>
     <div id="uploadStatus"></div>
@@ -399,6 +408,11 @@ function runDashboard() {
   const DEFAULT_SOURCES = (typeof DASHBOARD_DATA_SOURCES !== "undefined" && Array.isArray(DASHBOARD_DATA_SOURCES))
     ? DASHBOARD_DATA_SOURCES : [];
   const nf = new Intl.NumberFormat('vi-VN', { maximumFractionDigits: 0 });
+
+  // Dien link server sau khi deploy xong tren Vercel, vi du:
+  // 'https://kiemsoatvatu-publish.vercel.app/api/publish'
+  const SERVER_URL = '';
+  const uploadedFileNames = new Set();
 
   if (DEFAULT_SOURCES.length === 0) {
     document.body.innerHTML = '<div style="padding:60px;text-align:center;font-family:sans-serif;color:#d03b3b;">' +
@@ -514,6 +528,7 @@ function runDashboard() {
   const fileInputReal = document.getElementById('fileInputReal');
   const uploadStatus = document.getElementById('uploadStatus');
   const sourceButtonsEl = document.getElementById('sourceButtons');
+  const publishBtn = document.getElementById('publishBtn');
 
   function setStatus(text, kind) {
     uploadStatus.textContent = text;
@@ -737,6 +752,7 @@ function runDashboard() {
     }
 
     return {
+      label: sourceFileName.replace(/\.[^.]+$/, ''),
       generatedAt,
       sourceFile: sourceFileName,
       sourceSheet: sheetName,
@@ -787,23 +803,59 @@ function runDashboard() {
           lastAddedId = id;
           addedCount++;
         }
+        uploadedFileNames.add(file.name);
       } catch (err) {
         errors.push(file.name + ': ' + err.message);
       }
     }
 
     if (lastAddedId) { switchSource(lastAddedId); } else { rebuildSourceButtons(); }
+    publishBtn.style.display = uploadedFileNames.size > 0 ? 'inline-block' : 'none';
 
     const parts = [];
     if (addedCount > 0) parts.push('thêm ' + addedCount + ' nguồn mới');
     if (updatedCount > 0) parts.push('ghi đè ' + updatedCount + ' nguồn trùng tên');
 
     if (errors.length === 0) {
-      setStatus('✓ Đã ' + parts.join(', ') + '. Bấm vào các nút bên dưới để chuyển qua lại.', 'ok');
+      setStatus('✓ Đã ' + parts.join(', ') + '. Bấm "🚀 Lưu lên GitHub ngay" để lưu vĩnh viễn cho mọi người, hoặc bấm vào các nút bên dưới để chuyển qua lại xem thử trước.', 'ok');
     } else if (parts.length > 0) {
       setStatus('✓ Đã ' + parts.join(', ') + '. ✕ Lỗi: ' + errors.join(' | '), 'error');
     } else {
       setStatus('✕ Lỗi: ' + errors.join(' | '), 'error');
+    }
+  });
+
+  publishBtn.addEventListener('click', async function () {
+    if (!SERVER_URL) {
+      setStatus('✕ Server chưa được cấu hình, chưa thể lưu trực tiếp.', 'error');
+      return;
+    }
+    publishBtn.disabled = true;
+    fileBtn.disabled = true;
+    publishBtn.textContent = 'Đang lưu lên GitHub...';
+    setStatus('Đang lưu lên GitHub, vui lòng đợi...', 'muted');
+    try {
+      const resp = await fetch(SERVER_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          sources: dataSources.map(s => s.data),
+          sourceFileName: Array.from(uploadedFileNames).join(', ')
+        })
+      });
+      const respData = await resp.json().catch(() => ({}));
+      if (!resp.ok || !respData.success) {
+        throw new Error(respData.error || ('Server trả về lỗi ' + resp.status));
+      }
+      setStatus('✓ Đã lưu thành công lên GitHub! Trong khoảng 30-60 giây, mọi người mở lại link này sẽ thấy dữ liệu mới.', 'ok');
+      uploadedFileNames.clear();
+      publishBtn.style.display = 'none';
+    } catch (err) {
+      setStatus('✕ Lỗi: ' + err.message, 'error');
+    } finally {
+      publishBtn.disabled = false;
+      fileBtn.disabled = false;
+      publishBtn.textContent = '🚀 Lưu lên GitHub ngay';
     }
   });
 
