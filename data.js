@@ -1,5 +1,5 @@
 ﻿// File du lieu tu dong sinh ra tu Excel - KHONG chinh sua tay
-// Sinh luc: 2026-09-01 13:46:43
+// TEST: gia lap file nhan tu dong nghiep
 // So nguon: 3
 const DASHBOARD_DATA_SOURCES = [
     {
