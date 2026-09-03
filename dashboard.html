@@ -3,6 +3,9 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+<meta http-equiv="Pragma" content="no-cache">
+<meta http-equiv="Expires" content="0">
 <title>Dashboard Kiểm Soát Vật Tư Sản Xuất</title>
 <style>
   :root {
@@ -380,8 +383,18 @@
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
-<script src="data.js"></script>
 <script>
+// Tai data.js voi tham so chong cache (?t=...) de luon lay ban moi nhat,
+// khong bi trinh duyet giu ban cu du trang dashboard.html da duoc tai lai.
+(function loadDataJsThenRun() {
+  var s = document.createElement('script');
+  s.src = 'data.js?t=' + Date.now();
+  s.onload = runDashboard;
+  s.onerror = runDashboard; // van chay de hien thong bao "khong tim thay data.js" ro rang
+  document.head.appendChild(s);
+})();
+
+function runDashboard() {
 (function () {
   const DEFAULT_SOURCES = (typeof DASHBOARD_DATA_SOURCES !== "undefined" && Array.isArray(DASHBOARD_DATA_SOURCES))
     ? DASHBOARD_DATA_SOURCES : [];
@@ -1052,6 +1065,7 @@
   rebuildSourceButtons();
   render();
 })();
+}
 </script>
 </body>
 </html>
