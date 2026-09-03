@@ -1,0 +1,364 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+<meta http-equiv="Pragma" content="no-cache">
+<meta http-equiv="Expires" content="0">
+<title>Công cụ cập nhật dữ liệu</title>
+<style>
+  :root {
+    color-scheme: light;
+    --page: #f2f2ef; --card: #ffffff; --text-primary: #0b0b0b; --text-secondary: #52514e;
+    --text-muted: #898781; --border: rgba(11,11,11,0.10); --baseline: #c3c2b7;
+    --blue: #2a78d6; --blue-soft: #e8f1fc; --good: #0ca30c; --good-soft: #e5f6e5;
+    --critical: #d03b3b; --critical-soft: #fbe9e9; --shadow: 0 1px 2px rgba(11,11,11,0.04), 0 4px 16px rgba(11,11,11,0.06);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      color-scheme: dark; --page: #101010; --card: #1f1f1e; --text-primary: #ffffff;
+      --text-secondary: #c3c2b7; --text-muted: #898781; --border: rgba(255,255,255,0.10);
+      --baseline: #383835; --blue: #3987e5; --blue-soft: #1a2c40; --good: #0ca30c;
+      --good-soft: #123a16; --critical: #e66767; --critical-soft: #3d1c1c;
+      --shadow: 0 1px 2px rgba(0,0,0,0.3), 0 4px 16px rgba(0,0,0,0.35);
+    }
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; background: var(--page); color: var(--text-primary);
+    font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+  body { padding: 24px; }
+  .wrap { max-width: 760px; margin: 0 auto; }
+  h1 { font-size: 21px; font-weight: 700; margin: 0 0 6px 0; }
+  p.sub { color: var(--text-secondary); font-size: 13.5px; margin: 0 0 20px 0; }
+  .card { background: var(--card); border: 1px solid var(--border); border-radius: 14px;
+    box-shadow: var(--shadow); padding: 18px 20px; margin-bottom: 18px; }
+  .card h2 { font-size: 15px; margin: 0 0 10px 0; }
+  .card ol, .card ul { margin: 8px 0 0 0; padding-left: 20px; font-size: 13.5px; line-height: 1.8; color: var(--text-secondary); }
+  .card ol li b, .card ul li b { color: var(--text-primary); }
+  .file-btn { font-family: inherit; cursor: pointer; border-radius: 10px; padding: 10px 18px;
+    font-size: 14px; font-weight: 600; border: 1.5px solid var(--blue); background: var(--blue); color: #fff; }
+  .file-btn:hover { opacity: .9; }
+  .file-btn:disabled { opacity: .5; cursor: not-allowed; }
+  #fileInput { display: none; }
+  #status { font-size: 13px; margin-top: 12px; white-space: pre-line; }
+  .status-ok { color: var(--good); } .status-err { color: var(--critical); } .status-muted { color: var(--text-muted); }
+  .source-list { list-style: none; margin: 10px 0 0 0; padding: 0; }
+  .source-list li { padding: 8px 12px; border-radius: 8px; background: var(--blue-soft); margin-bottom: 6px; font-size: 13px; display: flex; justify-content: space-between; align-items: center; }
+  .source-list li.new-src { background: var(--good-soft); }
+  .badge { font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 999px; }
+  .badge.new { background: var(--good); color: #fff; }
+  .badge.updated { background: var(--blue); color: #fff; }
+  .download-btn { font-family: inherit; cursor: pointer; border-radius: 10px; padding: 12px 22px;
+    font-size: 15px; font-weight: 700; border: none; background: var(--good); color: #fff; margin-top: 14px; display: none; }
+  .download-btn:hover { opacity: .9; }
+  code { background: var(--blue-soft); padding: 1px 6px; border-radius: 5px; font-size: 12.5px; }
+  .step-num { display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px;
+    border-radius: 999px; background: var(--blue); color: #fff; font-size: 12px; font-weight: 700; margin-right: 6px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>🔄 Công cụ cập nhật dữ liệu Dashboard</h1>
+  <p class="sub">Dùng khi bạn được cấp quyền cộng tác viên trên GitHub và muốn tự cập nhật dữ liệu — không cần cài đặt gì, chỉ cần trình duyệt.</p>
+
+  <div class="card">
+    <h2>Bước 1 — Tạo file dữ liệu mới</h2>
+    <p class="sub" style="margin-bottom:10px;">Công cụ sẽ tự lấy dữ liệu hiện tại của các nguồn khác, chỉ thêm/cập nhật đúng file bạn chọn — không làm mất dữ liệu của người khác.</p>
+    <button class="file-btn" id="fileBtn" disabled>Đang tải dữ liệu hiện tại...</button>
+    <input type="file" id="fileInput" accept=".xlsx,.xls" multiple>
+    <div id="status" class="status-muted"></div>
+    <ul class="source-list" id="sourceList"></ul>
+    <button class="download-btn" id="downloadBtn">⬇️ Tải xuống file data.js</button>
+  </div>
+
+  <div class="card">
+    <h2>Bước 2 — Đưa file lên GitHub (kéo-thả, không cần gõ lệnh)</h2>
+    <ol>
+      <li><span class="step-num">1</span>Vào: <a href="https://github.com/SN-CHUOI/KIEMSOATVATU.XSX" target="_blank">github.com/SN-CHUOI/KIEMSOATVATU.XSX</a></li>
+      <li><span class="step-num">2</span>Bấm nút <b>"Add file"</b> (gần nút xanh "Code") → chọn <b>"Upload files"</b></li>
+      <li><span class="step-num">3</span><b>Kéo thả</b> file <code>data.js</code> vừa tải xuống ở Bước 1 vào giữa khung trang (hoặc bấm "choose your files" để chọn)</li>
+      <li><span class="step-num">4</span>Cuộn xuống dưới, bấm nút xanh <b>"Commit changes"</b></li>
+    </ol>
+    <p class="sub" style="margin-top:10px;">Xong — trong khoảng 30-60 giây, trang web <a href="https://sn-chuoi.github.io/KIEMSOATVATU.XSX/dashboard.html" target="_blank">dashboard</a> sẽ tự hiện dữ liệu mới cho tất cả mọi người.</p>
+  </div>
+
+  <div class="card" style="border-color:var(--critical);">
+    <h2>Lưu ý</h2>
+    <ul>
+      <li>Bạn cần được mời làm <b>Collaborator</b> trên repo GitHub này trước thì mới bấm "Commit changes" được — nếu chưa, báo người quản trị mời bạn.</li>
+      <li>File Excel cần có sheet tên đúng <b>"Tổng hợp theo nhóm"</b> với cấu trúc giống file mẫu.</li>
+    </ul>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<script>
+(function () {
+  const nf = new Intl.NumberFormat('vi-VN', { maximumFractionDigits: 0 });
+  let currentSources = []; // mang cac {label, generatedAt, sourceFile, sourceSheet, products, keHoachSanLuong, items}
+  const changedLabels = new Set();
+
+  const statusEl = document.getElementById('status');
+  const fileBtn = document.getElementById('fileBtn');
+  const fileInput = document.getElementById('fileInput');
+  const sourceListEl = document.getElementById('sourceList');
+  const downloadBtn = document.getElementById('downloadBtn');
+
+  function setStatus(text, cls) {
+    statusEl.textContent = text;
+    statusEl.className = cls || 'status-muted';
+  }
+
+  function renderSourceList() {
+    sourceListEl.innerHTML = currentSources.map(s => {
+      const isChanged = changedLabels.has(s.sourceFile);
+      return '<li class="' + (isChanged ? 'new-src' : '') + '">' +
+        '<span>' + escapeHtml(s.label || s.sourceFile) + ' <span style="color:var(--text-muted);">(' + (s.items ? s.items.length : 0) + ' vật tư)</span></span>' +
+        (isChanged ? '<span class="badge new">Vừa cập nhật</span>' : '') +
+        '</li>';
+    }).join('');
+    downloadBtn.style.display = currentSources.length > 0 ? 'inline-block' : 'none';
+  }
+
+  function escapeHtml(s) {
+    return (s || '').toString().replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  }
+
+  // ---------- Tai du lieu hien tai tu web (de khong lam mat nguon khac) ----------
+  fetch('https://sn-chuoi.github.io/KIEMSOATVATU.XSX/data.js?t=' + Date.now())
+    .then(r => r.text())
+    .then(text => {
+      const idx = text.indexOf('const DASHBOARD_DATA_SOURCES = ');
+      if (idx === -1) throw new Error('Khong doc duoc data.js hien tai');
+      let jsonPart = text.substring(idx + 'const DASHBOARD_DATA_SOURCES = '.length).trim();
+      if (jsonPart.endsWith(';')) jsonPart = jsonPart.slice(0, -1);
+      currentSources = JSON.parse(jsonPart);
+      setStatus('✓ Đã tải dữ liệu hiện tại (' + currentSources.length + ' nguồn). Giờ bấm nút bên dưới để chọn file Excel của bạn.', 'status-ok');
+      fileBtn.disabled = false;
+      fileBtn.textContent = '📤 Chọn file Excel...';
+      renderSourceList();
+    })
+    .catch(err => {
+      setStatus('✕ Không tải được dữ liệu hiện tại: ' + err.message + ' (bạn vẫn có thể chọn file, nhưng sẽ chỉ có đúng nguồn của bạn, không giữ được nguồn khác)', 'status-err');
+      fileBtn.disabled = false;
+      fileBtn.textContent = '📤 Chọn file Excel...';
+    });
+
+  fileBtn.addEventListener('click', () => fileInput.click());
+
+  // ---------- Cac ham doc file Excel (giong dashboard.html) ----------
+  function cellAt(row, idx) {
+    if (!row) return null;
+    const v = row[idx];
+    if (v === null || v === undefined) return null;
+    if (typeof v === 'string' && v.trim() === '') return null;
+    return v;
+  }
+
+  function getSectionMap(headerRowArr, maxColIdx) {
+    const labels = [];
+    for (let c = 5; c <= maxColIdx; c++) {
+      const t = cellAt(headerRowArr, c);
+      if (t !== null && String(t).trim() !== '') labels.push({ col: c, text: String(t).trim() });
+    }
+    const sections = {};
+    for (let i = 0; i < labels.length; i++) {
+      const start = labels[i].col;
+      const end = (i + 1 < labels.length) ? labels[i + 1].col - 1 : maxColIdx;
+      sections[labels[i].text] = { start, end };
+    }
+    return sections;
+  }
+
+  function findSectionKey(sections, mustContain, mustNotContain) {
+    mustNotContain = mustNotContain || [];
+    for (const key of Object.keys(sections)) {
+      let ok = mustContain.every(m => key.indexOf(m) !== -1);
+      if (ok) ok = !mustNotContain.some(n => key.indexOf(n) !== -1);
+      if (ok) return key;
+    }
+    return null;
+  }
+
+  function parseWorkbookToDashboardData(workbook, sourceFileName, sourceLastModified) {
+    const sheetName = "Tổng hợp theo nhóm";
+    if (workbook.SheetNames.indexOf(sheetName) === -1) {
+      throw new Error('Không tìm thấy sheet "' + sheetName + '". Sheet có trong file: ' + workbook.SheetNames.join(', '));
+    }
+    const ws = workbook.Sheets[sheetName];
+    const rows = XLSX.utils.sheet_to_json(ws, { header: 1, raw: true, defval: null });
+    const range = XLSX.utils.decode_range(ws['!ref']);
+    const maxColIdx = range.e.c;
+
+    const headerRow = rows[1] || [];
+    const subHeaderRow = rows[2] || [];
+    const sections = getSectionMap(headerRow, maxColIdx);
+
+    const capKey = findSectionKey(sections, ["TỔNG SẢN LƯỢNG"]);
+    const demKey = findSectionKey(sections, ["NHU CẦU"]);
+    const phanBoKey = findSectionKey(sections, ["THỪA", "THIẾU", "PHÂN BỔ"]);
+    const tongNhuCauKey = findSectionKey(sections, ["Tổng nhu cầu"]);
+    const thuaThieuTongKey = findSectionKey(sections, ["Thừa", "Thiếu"], ["PHÂN BỔ", "QUY RA"]);
+    const danhGiaKey = findSectionKey(sections, ["Đánh giá"]);
+    const pctKey = findSectionKey(sections, ["đáp ứng"], ["TỔNG SẢN LƯỢNG"]);
+
+    if (!capKey || !demKey) {
+      throw new Error('Không tìm thấy bảng "TỔNG SẢN LƯỢNG" hoặc "NHU CẦU" ở dòng tiêu đề (dòng 2) của sheet.');
+    }
+
+    const capStart = sections[capKey].start;
+    const productCount = sections[capKey].end - capStart + 1;
+    const demStart = sections[demKey].start;
+    const phanBoStart = phanBoKey ? sections[phanBoKey].start : null;
+    const tongNhuCauCol = tongNhuCauKey ? sections[tongNhuCauKey].start : null;
+    const thuaThieuTongCol = thuaThieuTongKey ? sections[thuaThieuTongKey].start : null;
+    const danhGiaCol = danhGiaKey ? sections[danhGiaKey].start : null;
+    const pctCol = pctKey ? sections[pctKey].start : null;
+
+    const products = [];
+    for (let i = 0; i < productCount; i++) {
+      const name = cellAt(subHeaderRow, capStart + i);
+      products.push(name === null ? '' : String(name).trim());
+    }
+
+    const keHoachSanLuong = {};
+    const row0 = rows[0] || [];
+    products.forEach((p, i) => {
+      const v = cellAt(row0, demStart + i);
+      keHoachSanLuong[p] = v === null ? 0 : v;
+    });
+
+    const items = [];
+    let blankStreak = 0;
+    for (let r = 3; r < rows.length; r++) {
+      const row = rows[r] || [];
+      const maVT = cellAt(row, 1);
+      if (maVT === null) {
+        blankStreak++;
+        if (blankStreak >= 3) break;
+        continue;
+      }
+      blankStreak = 0;
+      const tenVT = cellAt(row, 2);
+      const dvt = cellAt(row, 3);
+      let tonNhap = cellAt(row, 4);
+      if (tonNhap === null) tonNhap = 0;
+
+      const dapUng = {};
+      const nhuCau = {};
+      const phanBo = {};
+      products.forEach((p, i) => {
+        dapUng[p] = cellAt(row, capStart + i);
+        let v = cellAt(row, demStart + i);
+        if (v === null) v = 0;
+        nhuCau[p] = v;
+        phanBo[p] = (phanBoStart !== null) ? cellAt(row, phanBoStart + i) : null;
+      });
+
+      items.push({
+        maVT, tenVT, dvt, tonNhap, dapUng, nhuCau, phanBo,
+        tongNhuCau: (tongNhuCauCol !== null) ? cellAt(row, tongNhuCauCol) : null,
+        thuaThieuTong: (thuaThieuTongCol !== null) ? cellAt(row, thuaThieuTongCol) : null,
+        danhGia: (danhGiaCol !== null) ? cellAt(row, danhGiaCol) : null,
+        phanTramDapUng: (pctCol !== null) ? cellAt(row, pctCol) : null
+      });
+    }
+
+    if (items.length === 0) {
+      throw new Error('Không đọc được dòng dữ liệu nào. Kiểm tra file có đúng cấu trúc mẫu không.');
+    }
+
+    let generatedAt;
+    if (sourceLastModified) {
+      const d = new Date(sourceLastModified);
+      const pad = n => String(n).padStart(2, '0');
+      generatedAt = d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate()) + ' ' +
+        pad(d.getHours()) + ':' + pad(d.getMinutes()) + ':' + pad(d.getSeconds());
+    } else {
+      generatedAt = new Date().toLocaleString('vi-VN');
+    }
+
+    return {
+      label: sourceFileName.replace(/\.[^.]+$/, ''),
+      generatedAt,
+      sourceFile: sourceFileName,
+      sourceSheet: sheetName,
+      products,
+      keHoachSanLuong,
+      items
+    };
+  }
+
+  function readFileAsArrayBuffer(file) {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = evt => resolve(evt.target.result);
+      reader.onerror = () => reject(new Error('Không đọc được file: ' + file.name));
+      reader.readAsArrayBuffer(file);
+    });
+  }
+
+  fileInput.addEventListener('change', async function (e) {
+    const files = Array.from(e.target.files || []);
+    if (files.length === 0) return;
+    fileInput.value = '';
+
+    let okCount = 0;
+    const errors = [];
+
+    for (const file of files) {
+      setStatus('Đang đọc file: ' + file.name + ' ...', 'status-muted');
+      try {
+        const buf = await readFileAsArrayBuffer(file);
+        const workbook = XLSX.read(new Uint8Array(buf), { type: 'array' });
+        const parsed = parseWorkbookToDashboardData(workbook, file.name, file.lastModified);
+
+        const existingIdx = currentSources.findIndex(s => s.sourceFile === file.name);
+        if (existingIdx !== -1) {
+          currentSources[existingIdx] = parsed;
+        } else {
+          currentSources.push(parsed);
+        }
+        changedLabels.add(file.name);
+        okCount++;
+      } catch (err) {
+        errors.push(file.name + ': ' + err.message);
+      }
+    }
+
+    renderSourceList();
+
+    if (errors.length === 0) {
+      setStatus('✓ Đã cập nhật ' + okCount + ' file. Bấm "Tải xuống file data.js" bên dưới để lấy file mới.', 'status-ok');
+    } else if (okCount > 0) {
+      setStatus('✓ Cập nhật được ' + okCount + ' file. ✕ Lỗi: ' + errors.join(' | '), 'status-err');
+    } else {
+      setStatus('✕ Lỗi: ' + errors.join(' | '), 'status-err');
+    }
+  });
+
+  downloadBtn.addEventListener('click', function () {
+    const now = new Date();
+    const pad = n => String(n).padStart(2, '0');
+    const ts = now.getFullYear() + '-' + pad(now.getMonth()+1) + '-' + pad(now.getDate()) + ' ' + pad(now.getHours()) + ':' + pad(now.getMinutes()) + ':' + pad(now.getSeconds());
+    const jsContent =
+      "// File du lieu duoc cap nhat qua cong cu web - KHONG chinh sua tay\n" +
+      "// Cap nhat luc: " + ts + "\n" +
+      "// So nguon: " + currentSources.length + "\n" +
+      "const DASHBOARD_DATA_SOURCES = " + JSON.stringify(currentSources) + ";\n";
+
+    const blob = new Blob([jsContent], { type: 'application/javascript;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'data.js';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    setTimeout(() => URL.revokeObjectURL(url), 5000);
+  });
+})();
+</script>
+</body>
+</html>
