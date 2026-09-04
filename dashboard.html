@@ -318,7 +318,7 @@
         <div class="u-desc">Tải lên 1 hoặc nhiều file Excel (mỗi file cần có sheet tên đúng "Tổng hợp theo nhóm" với cấu trúc giống file mẫu) rồi bấm nút bên dưới để chuyển qua lại xem từng nguồn. File được xử lý ngay trong trình duyệt của bạn. Bấm "Lưu lên GitHub ngay" để cập nhật thẳng cho tất cả mọi người xem link này.</div>
       </div>
       <button class="file-btn" id="fileBtn">Thêm file Excel...</button>
-      <button class="publish-btn" id="publishBtn" style="display:none;">🚀 Lưu lên GitHub ngay</button>
+      <button class="publish-btn" id="publishBtn" style="display:none;">💾 Lưu (Save)</button>
       <input type="file" id="fileInputReal" accept=".xlsx,.xls" multiple>
     </div>
     <div id="uploadStatus"></div>
@@ -817,7 +817,7 @@ function runDashboard() {
     if (updatedCount > 0) parts.push('ghi đè ' + updatedCount + ' nguồn trùng tên');
 
     if (errors.length === 0) {
-      setStatus('✓ Đã ' + parts.join(', ') + '. Bấm "🚀 Lưu lên GitHub ngay" để lưu vĩnh viễn cho mọi người, hoặc bấm vào các nút bên dưới để chuyển qua lại xem thử trước.', 'ok');
+      setStatus('✓ Đã ' + parts.join(', ') + '. Bấm "💾 Lưu (Save)" để lưu vĩnh viễn cho mọi người, hoặc bấm vào các nút bên dưới để chuyển qua lại xem thử trước.', 'ok');
     } else if (parts.length > 0) {
       setStatus('✓ Đã ' + parts.join(', ') + '. ✕ Lỗi: ' + errors.join(' | '), 'error');
     } else {
@@ -855,7 +855,7 @@ function runDashboard() {
     } finally {
       publishBtn.disabled = false;
       fileBtn.disabled = false;
-      publishBtn.textContent = '🚀 Lưu lên GitHub ngay';
+      publishBtn.textContent = '💾 Lưu (Save)';
     }
   });
 

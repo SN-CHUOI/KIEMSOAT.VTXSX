@@ -75,7 +75,7 @@
     <div id="status" class="status-muted"></div>
     <ul class="source-list" id="sourceList"></ul>
     <div>
-      <button class="publish-btn" id="publishBtn">🚀 Lưu lên GitHub ngay</button>
+      <button class="publish-btn" id="publishBtn">💾 Lưu (Save)</button>
       <button class="download-btn" id="downloadBtn" style="margin-top:0;">⬇️ Hoặc tải file data.js (kéo-thả thủ công)</button>
     </div>
   </div>
@@ -83,7 +83,7 @@
   <div class="card" style="border-color:var(--critical);">
     <h2>Lưu ý</h2>
     <ul>
-      <li>Bấm <b>"🚀 Lưu lên GitHub ngay"</b> để cập nhật thẳng cho tất cả mọi người, không cần rời trang này.</li>
+      <li>Bấm <b>"💾 Lưu (Save)"</b> để cập nhật thẳng cho tất cả mọi người, không cần rời trang này.</li>
       <li>File Excel cần có sheet tên đúng <b>"Tổng hợp theo nhóm"</b> với cấu trúc giống file mẫu.</li>
     </ul>
   </div>
@@ -391,7 +391,7 @@
       setStatus('✕ Lỗi: ' + err.message, 'status-err');
     } finally {
       publishBtn.disabled = false;
-      publishBtn.textContent = '🚀 Lưu lên GitHub ngay';
+      publishBtn.textContent = '💾 Lưu (Save)';
     }
   });
 })();
