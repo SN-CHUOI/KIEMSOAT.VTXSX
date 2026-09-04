@@ -3,7 +3,7 @@
 // Khong ai (ke ca nguoi dung cong cu) can go token rieng nua.
 
 const OWNER = 'SN-CHUOI';
-const REPO = 'KIEMSOATVATU.XSX';
+const REPO = 'KIEMSOAT.VTXSX';
 const FILE_PATH = 'data.js';
 const ALLOWED_ORIGIN = 'https://sn-chuoi.github.io';
 

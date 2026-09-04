@@ -83,4 +83,4 @@ if ($finalList.Count -eq 0) {
     $finalList | ForEach-Object { Write-Output "  - $($_.Name)" }
 }
 Write-Output ""
-Write-Output "Web: https://sn-chuoi.github.io/KIEMSOATVATU.XSX/dashboard.html (cap nhat sau ~30-60s)"
+Write-Output "Web: https://sn-chuoi.github.io/KIEMSOAT.VTXSX/ (cap nhat sau ~30-60s)"

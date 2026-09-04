@@ -8,6 +8,6 @@ powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0auto_publish.ps1"
 echo.
 echo ============================================
 echo   XONG! Web se tu cap nhat sau ~30-60 giay.
-echo   Link: https://sn-chuoi.github.io/KIEMSOATVATU.XSX/
+echo   Link: https://sn-chuoi.github.io/KIEMSOAT.VTXSX/
 echo ============================================
 pause
